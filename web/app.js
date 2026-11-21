@@ -461,6 +461,7 @@ function dayBlock(day, evs, showEmpty = false) {
         <span>${icon("clock")}${e.all_day ? t("all_day") : `${fmtTime(e.s)} – ${fmtTime(e.e)}`}</span>
         ${e.location ? `<span>${icon("pin")}${isURL(e.location) ? t("map") : esc(e.location)}</span>` : ""}
         <span class="gtag" style="--c:${esc(evColor(e))}"><i></i>${esc(e.group_name || t("general"))}</span>
+        ${e.created_by && e.author ? `<span class="by"><span class="avatar xs" data-uid="${e.created_by}">${esc(initials({ name: e.author }))}</span>${t("by")} ${esc(e.author)}</span>` : ""}
         ${e.participants?.length ? `<span>${icon("groups")}${e.participants.length}</span>` : ""}
         ${evMiss(e) ? `<span class="need">${icon("alert")}${t("vol_title")}: ${missText(evMiss(e))}</span>` : ""}
       </div>${e.my_signup ? `<div class="mybook">${icon("check")}${t("you_are_booked")}: ${esc(slotText(e.my_signup))}</div>` : ""}</span>${e.via_ai ? `<span class="badge acc">AI</span>` : "<span></span>"}</button>`).join("")

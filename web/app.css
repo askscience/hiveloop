@@ -1553,3 +1553,5 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .notifcard .nst .ic { width: 15px; height: 15px; }
 .notifcard .grow { flex: 1; }
 .dmpick { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.agenda .item .s .by { display: inline-flex; align-items: center; gap: 5px; }
+.agenda .item .s .by .avatar.xs { width: 18px; height: 18px; font-size: 7.5px; }
