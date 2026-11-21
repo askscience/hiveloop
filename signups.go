@@ -33,6 +33,7 @@ func (a *App) attachSignups(u *User, evs []Event) {
 	if len(evs) == 0 {
 		return
 	}
+	a.attachShifts(u, evs)
 	idx := map[int64]int{}
 	ids := make([]string, len(evs))
 	for i, e := range evs {

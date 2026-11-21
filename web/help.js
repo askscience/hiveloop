@@ -97,7 +97,7 @@ You are the **super admin**: full control. You can do everything an admin does a
 - **I miei gruppi**: solo gli eventi dei tuoi gruppi più quelli generali.
 - **Nome di un gruppo**: solo quel gruppo.
 
-**Aprire un evento** — Toccalo: vedi orario, luogo, gruppo, chi l'ha creato e il **programma dettagliato**.
+**Aprire un evento** — Toccalo: vedi orario, luogo, gruppo e il **programma dettagliato**. In alto c'è **chi l'ha creato**: se hai un dubbio premi :chat: **Scrivi** e gli mandi un messaggio privato, con il nome dell'evento già scritto.
 
 **Aggiungere un evento** — Premi **+ Nuovo evento** (su computer puoi anche cliccare due volte su un giorno). Compila titolo, inizio, fine, gruppo e, se vuoi, luogo e programma. Nel **luogo** scrivi nome e paese (es. *Municipio, Via Roma 1, Bologna*) oppure incolla un link di Google Maps: nell'evento diventa **Apri la mappa**. Il **programma** si scrive come i documenti: premi **+** accanto a una riga per titoli ed elenchi e seleziona il testo per grassetto, corsivo e link.
 
@@ -106,6 +106,10 @@ ${r === "user"
   : `**Cosa puoi modificare** — Come ${r === "admin" ? "admin" : "super admin"} puoi aggiungere, modificare ed eliminare gli eventi di **tutti i gruppi** e anche gli eventi **Generali** (scegli *Generale* nel campo Gruppo): sono quelli che riguardano tutta l'organizzazione.`}
 
 **Segnare la presenza a un evento** — Apri l'evento e premi **Segna presenza**. Scegli **Tutto l'evento** (predefinito) oppure una **Fascia oraria** (es. dalle 10 alle 12 al banchetto) e, se vuoi, una nota (*"porto le sedie"*). Nel calendario gli eventi dove hai segnato la presenza sono evidenziati con :check: e mostrano il tuo orario; il numero indica quante persone ci saranno. Nell'evento, sotto **Presenze**, vedi chi c'è e in che orari. Puoi modificare o togliere la tua presenza quando vuoi. Il filtro **Le mie presenze** mostra solo i tuoi impegni.${r === "user" ? "" : " Chi può modificare l'evento può anche togliere la presenza di qualcuno."}
+
+**Volontariə e turni** — Quando crei o modifichi un evento, nella parte **Volontariə** premi **+ Aggiungi turno** e indica orario e quante persone servono (es. *banchetto di Natale, 10–13, 2 volontariə*; puoi aggiungere un compito, come *cassa*). Nell'evento ogni turno mostra a che punto è (**1/2**, in rosso se mancano persone) e chi si è segnato: premi **Mi segno** per dare una mano, anche se non fai parte di quel gruppo, e **Tolgo** se non puoi più. Nel calendario il numero rosso indica quante persone mancano. Se un turno resta scoperto, i membri del gruppo (per gli eventi generali, tutti) ricevono un avviso **3 giorni, 1 giorno e 3 ore prima**, nella chat e come notifica; chi si è già segnatə non viene disturbatə.
+
+**Eventi privati del gruppo** — Per riunioni e organizzazione interna spunta :lock: **Privato: solo il gruppo** nell'evento: lo vedono solo i membri del gruppo${r === "user" ? " e gli amministratori" : " (e voi amministratori)"}, con un lucchetto nel calendario. Un evento privato non si può condividere con un link pubblico.
 
 **Condividere con chi non ha Hiveloop** — Apri un evento e premi :share: **Condividi**: ottieni un **link pubblico** da mandare (pulsanti *Copia link* e *WhatsApp*). Chi lo apre vede data, orario, luogo e programma e può aggiungerlo al proprio calendario, senza account; i nomi dei partecipanti non compaiono. Per mandare **tutto il programma di una giornata**, tocca il giorno e premi :share: accanto alla data: se hai scelto il filtro di un gruppo, il link mostra solo gli eventi di quel gruppo. Gli eventi aggiunti dopo compaiono da soli. Puoi togliere l'accesso in ogni momento con **Disattiva link**. Puoi anche chiederlo all'assistente: *"Dammi il link della giornata di sabato del gruppo Escursioni da mandare a chi vuole partecipare"*. Può condividere chi può modificare l'evento (membri del gruppo e amministratori); la giornata con tutti i gruppi solo gli amministratori.
 
@@ -123,7 +127,7 @@ ${r === "user"
 - **My groups**: only your groups' events plus general ones.
 - **A group name**: only that group.
 
-**Opening an event** — Tap it: time, place, group, who created it and the **detailed program**.
+**Opening an event** — Tap it: time, place, group and the **detailed program**. At the top you see **who created it**: if you have a question press :chat: **Message** to write to them privately, with the event's name already filled in.
 
 **Adding an event** — Press **+ New event** (on a computer you can also click a day twice). Fill in title, start, end, group and optionally place and program. For the **place** write the name and town (e.g. *Town Hall, Main Street 1, Springfield*) or paste a Google Maps link: the event shows **Open map**. The **program** is written like documents: press **+** next to a line for headings and lists, and select text for bold, italic and links.
 
@@ -132,6 +136,10 @@ ${r === "user"
   : `**What you can change** — As ${r === "admin" ? "an admin" : "super admin"} you can add, edit and delete events of **every group** and **General** events (choose *General* in the Group field): those concern the whole organisation.`}
 
 **Marking attendance** — Open the event and press **Mark attendance**. Choose **Whole event** (default) or a **Time slot** (e.g. 10–12 at the stand) and optionally a note (*"bringing chairs"*). In the calendar, events where you marked attendance are highlighted with :check: and show your time; the number shows how many people will be there. Inside the event, under **Attendance**, you see who's coming and when. You can change or remove your attendance anytime. The **My attendance** filter shows only your commitments.${r === "user" ? "" : " Whoever can edit the event can also remove someone's attendance."}
+
+**Volunteers and shifts** — When you create or edit an event, in **Volunteers** press **+ Add shift** and set the time and how many people are needed (e.g. *Christmas stall, 10–13, 2 volunteers*; you can add a task, like *till*). Inside the event each shift shows how it's going (**1/2**, red while people are missing) and who signed up: press **Sign me up** to help, even if you're not in that group, and **Remove me** if you can't make it any more. In the calendar the red number shows how many people are missing. If a shift is still short, the group's members (everyone for general events) are reminded **3 days, 1 day and 3 hours before**, in the chat and as a notification; whoever already signed up is not bothered.
+
+**Private group events** — For meetings and internal organisation tick :lock: **Private: group only** in the event: only the group's members${r === "user" ? " and admins" : " (and you admins)"} see it, with a padlock in the calendar. A private event can't be shared with a public link.
 
 **Sharing with people who don't use Hiveloop** — Open an event and press :share: **Share**: you get a **public link** to send (*Copy link* and *WhatsApp* buttons). Whoever opens it sees date, time, place and program and can add it to their calendar, without an account; participants' names are not shown. To send **a whole day's program**, tap the day and press :share: next to the date: if a group filter is selected, the link shows only that group's events. Events added later appear automatically. You can remove access anytime with **Turn off link**. You can also ask the assistant: *"Give me the link to Saturday's program for the Hiking group to send to people who want to join"*. Anyone who can edit the event can share it (group members and admins); a day with all groups only admins.
 
@@ -164,7 +172,9 @@ ${r === "user"
 
 **Eliminare un messaggio** — Passa sopra il messaggio (sul telefono toccalo) e premi il cestino. ${r === "user" ? "Puoi eliminare solo i tuoi messaggi." : "Come amministratore puoi eliminare anche i messaggi degli altri, se sono inappropriati."}
 
-**Notifiche** — Premi **Attiva notifiche** in cima alla pagina Chat per ricevere un avviso del browser quando ti menzionano mentre Hiveloop è aperta in un'altra scheda.`],
+**Messaggi privati** — In fondo all'elenco delle chat premi :edit: **Nuovo messaggio** e scegli la persona; puoi anche toccare un membro nella pagina di un gruppo, o premere **Scrivi** in un evento per scrivere a chi l'ha creato. La conversazione la leggete **solo voi due**${r === "user" ? "" : " (neanche gli amministratori la vedono)"}. Nei messaggi privati non si allegano documenti e non c'è l'assistente.
+
+**Notifiche** — Da **Profilo → Notifiche** premi **Attiva** (o la campanella :bell: nella pagina Chat): ricevi un avviso anche ad app chiusa per **messaggi privati**, **menzioni**, risposte ai tuoi messaggi e **turni di volontariato scoperti**. Va attivato su ogni dispositivo; **Prova** manda una notifica di prova. Su iPhone prima aggiungi Hiveloop alla schermata Home e aprilo da lì. Nell'app Android le notifiche arrivano dall'app (controlla ogni 15 minuti circa).`],
     en: ["Chat and @mentions", (r) => `**The chats**
 - **General**: the whole organisation's chat.
 - One chat for **each group**: its members can see it${r === "user" ? " (and admins)" : ". As an admin you can read and write in every group chat"}.
@@ -188,7 +198,9 @@ ${r === "user"
 
 **Deleting a message** — Hover the message (tap it on a phone) and press the bin. ${r === "user" ? "You can delete only your own messages." : "As an admin you can also delete other people's messages if they're inappropriate."}
 
-**Notifications** — Press **Enable notifications** at the top of the Chat page to get a browser alert when you're mentioned while Hiveloop is open in another tab.`],
+**Private messages** — At the bottom of the chat list press :edit: **New message** and choose the person; you can also tap a member on a group's page, or press **Message** in an event to write to whoever created it. Only **the two of you** can read the conversation${r === "user" ? "" : " (admins can't see it either)"}. Private messages have no attachments and no assistant.
+
+**Notifications** — In **Profile → Notifications** press **Turn on** (or the :bell: bell on the Chat page): you get notified even when the app is closed for **private messages**, **mentions**, replies to your messages and **volunteer shifts still short**. Turn it on on each device; **Test** sends a test notification. On iPhone add Hiveloop to the Home Screen first and open it from there. In the Android app notifications come from the app (it checks about every 15 minutes).`],
   },
   {
     id: "groups", icon: "groups", roles: ["user", "admin", "superadmin"],

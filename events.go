@@ -23,21 +23,27 @@ type Event struct {
 	CreatedBy   *int64 `json:"created_by"`
 	Author      string `json:"author,omitempty"`
 	ViaAI       bool   `json:"via_ai"`
+	Private     bool   `json:"private"`
 	CanEdit     bool   `json:"can_edit"`
+	AuthorUser  string `json:"author_username,omitempty"`
 
 	Participants []Signup `json:"participants"`
 	MySignup     *Signup  `json:"my_signup"`
+	Shifts       []Shift  `json:"shifts"`
+	Missing      int      `json:"missing"` // volunteers still needed in shifts that have not started
 }
 
 type EventInput struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Location    *string `json:"location"`
-	Start       *string `json:"start"`
-	End         *string `json:"end"`
-	AllDay      *bool   `json:"all_day"`
-	GroupID     *int64  `json:"group_id"`
-	ClearGroup  bool    `json:"clear_group"`
+	Title       *string       `json:"title"`
+	Description *string       `json:"description"`
+	Location    *string       `json:"location"`
+	Start       *string       `json:"start"`
+	End         *string       `json:"end"`
+	AllDay      *bool         `json:"all_day"`
+	GroupID     *int64        `json:"group_id"`
+	ClearGroup  bool          `json:"clear_group"`
+	Private     *bool         `json:"private"`
+	Shifts      *[]ShiftInput `json:"shifts"` // nil = unchanged, [] = none
 }
 
 var (
@@ -52,6 +58,19 @@ func (a *App) canEditGroup(u *User, gid *int64) bool {
 		return true
 	}
 	return gid != nil && a.isMember(u.ID, *gid)
+}
+
+// canSeeEvent: private events are internal to their group (plus admins and the super admin).
+func (a *App) canSeeEvent(u *User, e Event) bool {
+	return !e.Private || u.IsAdmin() || (e.GroupID != nil && u.ID != 0 && a.isMember(u.ID, *e.GroupID))
+}
+
+// visibleSQL restricts an event query to what u may see.
+func visibleSQL(u *User) (string, []any) {
+	if u.IsAdmin() {
+		return "", nil
+	}
+	return ` AND (e.private=0 OR e.group_id IN (SELECT group_id FROM group_members WHERE user_id=?))`, []any{u.ID}
 }
 
 func (a *App) parseTime(s string) (time.Time, error) {
@@ -72,14 +91,14 @@ func (a *App) fmtTime(unix int64) string {
 }
 
 const eventSelect = `SELECT e.id,e.title,e.description,e.location,e.start_at,e.end_at,e.all_day,e.group_id,
-	COALESCE(g.name,''),COALESCE(g.color,''),e.created_by,COALESCE(NULLIF(u.name,''),u.username,''),e.via_ai
+	COALESCE(g.name,''),COALESCE(g.color,''),e.created_by,COALESCE(NULLIF(u.name,''),u.username,''),e.via_ai,e.private,COALESCE(u.username,'')
 	FROM events e LEFT JOIN groups g ON g.id=e.group_id LEFT JOIN users u ON u.id=e.created_by`
 
 func (a *App) scanEvent(s interface{ Scan(...any) error }, u *User) (Event, error) {
 	var e Event
 	var start, end int64
 	var gid, cby sql.NullInt64
-	err := s.Scan(&e.ID, &e.Title, &e.Description, &e.Location, &start, &end, &e.AllDay, &gid, &e.GroupName, &e.GroupColor, &cby, &e.Author, &e.ViaAI)
+	err := s.Scan(&e.ID, &e.Title, &e.Description, &e.Location, &start, &end, &e.AllDay, &gid, &e.GroupName, &e.GroupColor, &cby, &e.Author, &e.ViaAI, &e.Private, &e.AuthorUser)
 	if err != nil {
 		return e, err
 	}
@@ -121,8 +140,8 @@ func (a *App) listEvents(u *User, from, to time.Time, scope string) ([]Event, er
 	args := []any{to.Unix(), from.Unix()}
 	switch {
 	case scope == "booked":
-		q += ` AND e.id IN (SELECT event_id FROM event_signups WHERE user_id=?)`
-		args = append(args, u.ID)
+		q += ` AND e.id IN (SELECT event_id FROM event_signups WHERE user_id=? UNION SELECT s.event_id FROM event_shifts s JOIN shift_signups x ON x.shift_id=s.id WHERE x.user_id=?)`
+		args = append(args, u.ID, u.ID)
 	case scope == "mine":
 		q += ` AND (e.group_id IS NULL OR e.group_id IN (SELECT group_id FROM group_members WHERE user_id=?))`
 		args = append(args, u.ID)
@@ -134,7 +153,9 @@ func (a *App) listEvents(u *User, from, to time.Time, scope string) ([]Event, er
 		q += ` AND (e.group_id=? OR e.group_id IS NULL)` // general events concern everyone
 		args = append(args, gid)
 	}
-	q += ` ORDER BY e.start_at LIMIT 2000`
+	vq, vargs := visibleSQL(u)
+	q += vq + ` ORDER BY e.start_at LIMIT 2000`
+	args = append(args, vargs...)
 	rows, err := a.db.Query(q, args...)
 	if err != nil {
 		return nil, err
@@ -156,8 +177,8 @@ func (a *App) listEvents(u *User, from, to time.Time, scope string) ([]Event, er
 
 func (a *App) getEvent(u *User, id int64) (Event, error) {
 	e, err := a.scanEvent(a.db.QueryRow(eventSelect+` WHERE e.id=?`, id), u)
-	if errors.Is(err, sql.ErrNoRows) {
-		return e, errNotFound
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && !a.canSeeEvent(u, e)) {
+		return Event{}, errNotFound
 	}
 	return e, err
 }
@@ -188,14 +209,29 @@ func (a *App) createEvent(u *User, in EventInput, viaAI bool) (Event, error) {
 	if end.Before(start) {
 		return Event{}, errBadInput
 	}
+	private := in.Private != nil && *in.Private
+	if private && in.GroupID == nil { // only a group's own events can be internal
+		return Event{}, errBadInput
+	}
+	var shifts []ShiftInput
+	if in.Shifts != nil {
+		if shifts, err = checkShifts(a, *in.Shifts, start, end); err != nil {
+			return Event{}, err
+		}
+	}
 	now := time.Now().Unix()
-	res, err := a.db.Exec(`INSERT INTO events(title,description,location,start_at,end_at,all_day,group_id,created_by,via_ai,created_at,updated_at)
-		VALUES(?,?,?,?,?,?,?,?,?,?,?)`, clip(*in.Title, 200), clip(deref(in.Description), 20000), clip(deref(in.Location), 200),
-		start.Unix(), end.Unix(), allDay, in.GroupID, u.ID, viaAI, now, now)
+	res, err := a.db.Exec(`INSERT INTO events(title,description,location,start_at,end_at,all_day,group_id,created_by,via_ai,private,created_at,updated_at)
+		VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`, clip(*in.Title, 200), clip(deref(in.Description), 20000), clip(deref(in.Location), 200),
+		start.Unix(), end.Unix(), allDay, in.GroupID, u.ID, viaAI, private, now, now)
 	if err != nil {
 		return Event{}, err
 	}
 	id, _ := res.LastInsertId()
+	if len(shifts) > 0 {
+		if err := a.saveShifts(id, shifts); err != nil {
+			return Event{}, err
+		}
+	}
 	e, err := a.getEventFull(u, id)
 	if err == nil {
 		a.liveEvent(u, "create", e)
@@ -257,10 +293,37 @@ func (a *App) updateEvent(u *User, id int64, in EventInput) (Event, error) {
 	if in.AllDay != nil {
 		allDay = *in.AllDay
 	}
-	_, err = a.db.Exec(`UPDATE events SET title=?,description=?,location=?,start_at=?,end_at=?,all_day=?,group_id=?,updated_at=? WHERE id=?`,
-		clip(title, 200), clip(desc, 20000), clip(loc, 200), start.Unix(), end.Unix(), allDay, newGroup, time.Now().Unix(), id)
+	private := cur.Private
+	if in.Private != nil {
+		private = *in.Private
+	}
+	if newGroup == nil {
+		if in.Private != nil && *in.Private {
+			return cur, errBadInput
+		}
+		private = false
+	}
+	var shifts []ShiftInput
+	if in.Shifts != nil {
+		if shifts, err = checkShifts(a, *in.Shifts, start, end); err != nil {
+			return cur, err
+		}
+	}
+	oldStart, _ := time.Parse(time.RFC3339, cur.Start)
+	_, err = a.db.Exec(`UPDATE events SET title=?,description=?,location=?,start_at=?,end_at=?,all_day=?,group_id=?,private=?,updated_at=? WHERE id=?`,
+		clip(title, 200), clip(desc, 20000), clip(loc, 200), start.Unix(), end.Unix(), allDay, newGroup, private, time.Now().Unix(), id)
 	if err != nil {
 		return cur, err
+	}
+	if private && !cur.Private { // internal now: the public page goes away
+		a.db.Exec(`DELETE FROM public_links WHERE kind='event' AND event_id=?`, id)
+	}
+	if in.Shifts != nil {
+		if err := a.saveShifts(id, shifts); err != nil {
+			return cur, err
+		}
+	} else {
+		a.moveShifts(id, start.Unix()-oldStart.Unix(), start.Unix(), end.Unix())
 	}
 	// keep sign-ups inside the new span
 	a.db.Exec(`UPDATE event_signups SET start_at=MAX(start_at,?), end_at=MIN(end_at,?) WHERE event_id=?`, start.Unix(), end.Unix(), id)

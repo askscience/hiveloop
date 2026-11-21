@@ -361,6 +361,7 @@ function canCreateEvents() { return isAdmin() || S.myGroups.length > 0; }
 async function viewCalendar(v, args) {
   await loadGroups();
   if (args[0]) { const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(args[0]) ? args[0] + "T00:00" : args[0]); if (!isNaN(d)) { cal.cur = startOfDay(d); cal.sel = startOfDay(d); } }
+  if (/^e\d+$/.test(args[1] || "")) cal.openId = +args[1].slice(1);
   if (!["all", "mine", "booked"].includes(cal.scope) && !groupById(+cal.scope)) cal.scope = "all";
   const render = async () => {
     const y = cal.cur.getFullYear(), m = cal.cur.getMonth();
@@ -413,6 +414,8 @@ function eventsOn(day) {
   return cal.events.filter((e) => e.s.getTime() < de && (e.e.getTime() > ds || e.s.getTime() >= ds));
 }
 const evColor = (e) => e.group_color || S.general?.color || "var(--ink-2)";
+const missText = (n) => (n === 1 ? t("vol_missing1") : t("vol_missing").replace("{n}", n));
+const evMiss = (e) => (e.missing > 0 && e.e > new Date() ? e.missing : 0);
 
 function renderMonth(body, gridStart, gridEnd, month, rerender) {
   const today = startOfDay(new Date());
@@ -422,7 +425,7 @@ function renderMonth(body, gridStart, gridEnd, month, rerender) {
     const evs = eventsOn(d);
     const cls = [d.getMonth() !== month && "out", sameDay(d, today) && "today", sameDay(d, cal.sel) && "sel"].filter(Boolean).join(" ");
     html += `<div class="day ${cls}" data-d="${d.getTime()}"><div class="num">${d.getDate()}</div>
-      ${evs.slice(0, 3).map((e) => { const ms = e.my_signup, mine = ms && !ms.all_day && sameDay(new Date(ms.start), d); return `<button class="ev ${ms ? "me" : ""}" data-e="${e.id}" style="--c:${esc(evColor(e))}">${ms ? icon("check") : ""}${mine ? `<span class="tm">${fmtTime(new Date(ms.start))}</span>` : e.all_day ? "" : `<span class="tm">${fmtTime(e.s)}</span>`}<span class="tt">${esc(e.title)}</span>${e.participants?.length ? `<span class="pc">${e.participants.length}</span>` : ""}</button>`; }).join("")}
+      ${evs.slice(0, 3).map((e) => { const ms = e.my_signup, mine = ms && !ms.all_day && sameDay(new Date(ms.start), d); return `<button class="ev ${ms ? "me" : ""}" data-e="${e.id}" style="--c:${esc(evColor(e))}">${ms ? icon("check") : ""}${mine ? `<span class="tm">${fmtTime(new Date(ms.start))}</span>` : e.all_day ? "" : `<span class="tm">${fmtTime(e.s)}</span>`}<span class="tt">${e.private ? icon("lock") : ""}${esc(e.title)}</span>${evMiss(e) ? `<span class="pc need">${evMiss(e)}</span>` : e.participants?.length ? `<span class="pc">${e.participants.length}</span>` : ""}</button>`; }).join("")}
       ${evs.length > 3 ? `<div class="more">+${evs.length - 3} ${t("more")}</div>` : ""}
       <div class="dots">${evs.slice(0, 4).map((e) => `<i style="--c:${esc(evColor(e))}"></i>`).join("")}</div></div>`;
   }
@@ -454,11 +457,12 @@ function dayBlock(day, evs, showEmpty = false) {
   return `<div class="dayblock ${today ? "today" : ""}">
     <div class="dlabel"><b>${day.getDate()}</b><span>${esc(fmt(day, { weekday: "short", month: "short" }))}</span>${evs.length && canShareDay() ? `<button class="ibtn xs ghost dshare" data-dshare="${ymd(day)}" title="${t("share_day")}" aria-label="${t("share_day")}">${icon("share")}</button>` : ""}</div>
     <div class="items">${evs.length ? evs.map((e, i) => `<button class="item rv" style="--i:${i};--c:${esc(evColor(e))}" data-e="${e.id}"><span class="bar"></span>
-      <span><div class="t">${esc(e.title)}</div><div class="s">
+      <span><div class="t">${e.private ? `<span class="lockt" title="${t("ev_private_short")}">${icon("lock")}</span>` : ""}${esc(e.title)}</div><div class="s">
         <span>${icon("clock")}${e.all_day ? t("all_day") : `${fmtTime(e.s)} – ${fmtTime(e.e)}`}</span>
         ${e.location ? `<span>${icon("pin")}${isURL(e.location) ? t("map") : esc(e.location)}</span>` : ""}
         <span class="gtag" style="--c:${esc(evColor(e))}"><i></i>${esc(e.group_name || t("general"))}</span>
         ${e.participants?.length ? `<span>${icon("groups")}${e.participants.length}</span>` : ""}
+        ${evMiss(e) ? `<span class="need">${icon("alert")}${t("vol_title")}: ${missText(evMiss(e))}</span>` : ""}
       </div>${e.my_signup ? `<div class="mybook">${icon("check")}${t("you_are_booked")}: ${esc(slotText(e.my_signup))}</div>` : ""}</span>${e.via_ai ? `<span class="badge acc">AI</span>` : "<span></span>"}</button>`).join("")
       : `<div class="muted" style="padding:10px 0">${t("no_events")}</div>`}</div></div>`;
 }
@@ -487,29 +491,66 @@ function showEvent(e, rerender) {
       : `${fmt(e.s, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} → ${fmt(e.e, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`;
   const s = sheet({
     title: e.title,
-    body: `<div class="ev-detail"><div class="meta">
+    body: `<div class="ev-detail">
+    ${e.created_by ? `<div class="ev-author"><span class="avatar" data-uid="${e.created_by}">${esc(initials({ name: e.author }))}</span><span class="who"><small>${t("created_by")}</small><b>${esc(e.author || "—")}</b></span>
+      ${e.created_by !== S.me.id && e.author_username ? `<button class="btn sm" data-dm>${icon("chat")}${t("write_to")}</button>` : ""}</div>` : ""}
+    <div class="meta">
       <div>${icon("clock")}<span>${esc(when)}</span></div>
       ${e.location ? `<div>${icon("pin")}<span>${isURL(e.location) ? "" : `${esc(e.location)} · `}<a href="${esc(mapsURL(e.location))}" target="_blank" rel="noopener">${t("open_map")}</a></span></div>` : ""}
       <div>${icon("groups")}<span class="gtag" style="--c:${esc(evColor(e))}"><i></i>${esc(e.group_name || t("general"))}</span></div>
-      <div>${icon("user")}<span class="muted">${t("by")} ${esc(e.author || "—")}${e.via_ai ? ` · <span class="badge acc">${t("via_ai")}</span>` : ""}</span></div>
+      ${e.private ? `<div class="priv">${icon("lock")}<span>${t("ev_private_line")}</span></div>` : ""}
+      ${e.via_ai ? `<div>${icon("ai")}<span><span class="badge acc">${t("via_ai")}</span></span></div>` : ""}
     </div>
+    ${shiftsHTML(e)}
     <div class="parts"><div class="parts-h"><b>${t("participants")}</b><span class="mono muted">${e.participants?.length || 0}</span><span style="flex:1"></span>
       ${e.my_signup ? `<button class="btn sm" data-book>${icon("edit")}${t("change_booking")}</button><button class="btn sm ghost danger" data-unbook>${icon("x")}</button>` : `<button class="btn sm primary" data-book>${icon("check")}${t("book")}</button>`}</div>
       ${e.participants?.length ? `<div class="plist">${e.participants.map((p) => `<div class="prow ${p.user_id === S.me.id ? "me" : ""}"><span class="avatar sm" data-uid="${p.user_id}">${esc(initials(p))}</span><span class="pn">${esc(p.name)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</span><span class="mono pt">${esc(slotText(p, e))}</span>${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn sm ghost danger" data-rmp="${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</div>`).join("")}</div>` : `<p class="muted" style="margin:6px 0 0">${t("nobody_yet")}</p>`}
     </div>
     ${e.description ? `<div class="md">${md(e.description)}</div>` : ""}</div>`,
-    foot: e.can_edit ? `<button class="btn danger left" data-del>${icon("trash")}${t("delete")}</button><button class="btn" data-pub>${icon("share")}${t("share")}</button><button class="btn primary" data-edit>${icon("edit")}${t("edit")}</button>` : "",
+    foot: e.can_edit ? `<button class="btn danger left" data-del>${icon("trash")}${t("delete")}</button>${e.private ? "" : `<button class="btn" data-pub>${icon("share")}${t("share")}</button>`}<button class="btn primary" data-edit>${icon("edit")}${t("edit")}</button>` : "",
   });
   $("[data-edit]", s.el)?.addEventListener("click", () => { s.close(); eventForm(e, null, rerender); });
   $("[data-pub]", s.el)?.addEventListener("click", () => publicLinkSheet({ path: `/api/events/${e.id}/link`, title: e.title, hint: t("public_event_hint") }));
   const reopen = async (updated) => { s.close(); await rerender(); showEvent({ ...updated, s: new Date(updated.start), e: new Date(updated.end) }, rerender); };
   $("[data-book]", s.el)?.addEventListener("click", () => signupForm(e, reopen));
+  $("[data-dm]", s.el)?.addEventListener("click", () => openDM(e.created_by, t("ask_about").replace("{t}", e.title)));
+  $$("[data-sjoin]", s.el).forEach((b) => (b.onclick = async () => { try { reopen(await api("PUT", `/api/events/${e.id}/shifts/${b.dataset.sjoin}/signup`)); toast(t("vol_joined"), false, null, "check"); } catch (err) { fail(err); } }));
+  $$("[data-sleave]", s.el).forEach((b) => (b.onclick = async () => { try { reopen(await api("DELETE", `/api/events/${e.id}/shifts/${b.dataset.sleave}/signup`)); toast(t("vol_left")); } catch (err) { fail(err); } }));
+  $$("[data-srm]", s.el).forEach((b) => (b.onclick = async () => { const [sid, uid] = b.dataset.srm.split(":"); try { reopen(await api("DELETE", `/api/events/${e.id}/shifts/${sid}/signups/${uid}`)); } catch (err) { fail(err); } }));
   $("[data-unbook]", s.el)?.addEventListener("click", async () => { try { reopen(await api("DELETE", `/api/events/${e.id}/signup`)); toast(t("booking_cancelled")); } catch (err) { fail(err); } });
   $$("[data-rmp]", s.el).forEach((b) => (b.onclick = async () => { try { reopen(await api("DELETE", `/api/events/${e.id}/signups/${b.dataset.rmp}`)); } catch (err) { fail(err); } }));
   $("[data-del]", s.el)?.addEventListener("click", async () => {
     if (!(await confirmSheet(e.title))) return;
     try { await api("DELETE", `/api/events/${e.id}`); toast(t("deleted")); s.close(); rerender(); } catch (err) { fail(err); }
   });
+}
+
+function shiftTime(sh, e) {
+  const s = new Date(sh.start), en = new Date(sh.end);
+  const day = sameDay(new Date(e.start), new Date(e.end)) ? "" : fmt(s, { weekday: "short", day: "numeric", month: "short" }) + " · ";
+  return `${day}${fmtTime(s)} – ${fmtTime(en)}`;
+}
+function shiftsHTML(e) {
+  if (!e.shifts?.length) return "";
+  const miss = e.missing > 0 && new Date(e.end) > new Date() ? e.missing : 0;
+  return `<div class="shifts"><div class="parts-h"><b>${t("vol_title")}</b>${miss ? `<span class="need">${icon("alert")}${missText(miss)}</span>` : `<span class="okc">${icon("check")}${t("vol_full")}</span>`}</div>
+    ${e.shifts.map((sh) => {
+      const have = sh.people.length, full = have >= sh.needed, past = new Date(sh.start) < new Date();
+      return `<div class="shift ${full ? "full" : ""}"><div class="sh-top"><span class="sh-time">${esc(shiftTime(sh, e))}</span>${sh.label ? `<span class="sh-label">${esc(sh.label)}</span>` : ""}<span class="grow"></span>
+        <span class="sh-count ${full ? "ok" : "bad"}">${have}/${sh.needed}</span>
+        ${past ? "" : sh.mine ? `<button class="btn sm ghost" data-sleave="${sh.id}">${t("vol_leave")}</button>` : `<button class="btn sm ${full ? "" : "primary"}" data-sjoin="${sh.id}">${icon("check")}${t("vol_join")}</button>`}</div>
+        <div class="sh-people">${sh.people.map((p) => `<span class="sp ${p.user_id === S.me.id ? "me" : ""}"><span class="avatar xs" data-uid="${p.user_id}">${esc(initials(p))}</span>${esc(p.name)}${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn xs ghost danger" data-srm="${sh.id}:${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</span>`).join("") || `<span class="muted">${t("vol_none")}</span>`}</div></div>`;
+    }).join("")}</div>`;
+}
+
+// openDM opens (or starts) the private conversation with someone, optionally with a first line ready.
+async function openDM(uid, prefill = "") {
+  try {
+    const r = await api("POST", "/api/dm", { user_id: uid });
+    chat.prefill = prefill;
+    closeAllPages();
+    if (location.hash === `#/chat/${r.room_id}`) route(); else location.hash = `#/chat/${r.room_id}`;
+  } catch (e) { fail(e); }
 }
 
 const isURL = (s) => /^https:\/\/\S+$/.test((s || "").trim());
@@ -611,7 +652,13 @@ function eventForm(ev, day, rerender) {
       ${isAdmin() ? `<option value="">${t("general")}</option>` : ""}
       ${editable.map((g) => `<option value="${g.id}" ${g.id === defGroup ? "selected" : ""}>${esc(g.name)}</option>`).join("")}
     </select></label>
+    <div class="privbox ${defGroup ? "" : "hidden"}" data-privrow><label class="check"><input type="checkbox" name="private" ${ev?.private ? "checked" : ""}>${icon("lock")}${t("ev_private")}</label>
+      <small class="hint">${t("ev_private_hint")}</small></div>
     <label class="field"><span>${t("location")} · ${t("optional")}</span><input class="input" name="location" maxlength="200" value="${esc(ev?.location)}"></label>
+    <div class="field vol-ed"><span>${t("vol_title")} · ${t("optional")}</span>
+      <small class="hint" style="margin:0 0 8px">${t("vol_hint")}</small>
+      <div class="shift-rows" data-shifts></div>
+      <button type="button" class="btn sm" data-addshift>${icon("plus")}${t("vol_add")}</button></div>
     <div class="field"><span>${t("description")}</span>
       <div class="ev-ed hl-ed md hidden" data-evdesc></div>
       <textarea class="input" name="description" rows="9" placeholder="${t("description_hint")}">${esc(ev?.description)}</textarea>
@@ -625,6 +672,31 @@ function eventForm(ev, day, rerender) {
     progEd = ed;
     holder.classList.remove("hidden"); ta.classList.add("hidden"); $("[data-evhint]", form).classList.remove("hidden");
   }).catch(() => {});
+  // private: only for a group's own events
+  const gsel = $("[name=group]", form), privRow = $("[data-privrow]", form);
+  gsel.onchange = () => { privRow.classList.toggle("hidden", !gsel.value); if (!gsel.value) $("[name=private]", form).checked = false; };
+  // volunteer shifts
+  const shiftsEl = $("[data-shifts]", form);
+  const shiftRow = (sh) => {
+    const row = h(`<div class="shift-row" data-sid="${sh.id || ""}">
+      <input class="input" type="datetime-local" name="ss" value="${localInput(new Date(sh.start))}" aria-label="${t("from")}">
+      <span class="muted">–</span>
+      <input class="input" type="datetime-local" name="se" value="${localInput(new Date(sh.end))}" aria-label="${t("to")}">
+      <label class="sh-n"><input class="input" type="number" name="sn" min="1" max="50" value="${sh.needed || 2}" aria-label="${t("vol_needed")}"><span>${t("vol_people")}</span></label>
+      <input class="input sh-l" name="sl" maxlength="80" placeholder="${t("vol_label_ph")}" value="${esc(sh.label || "")}">
+      <button type="button" class="ibtn sm ghost danger" data-rmshift aria-label="${t("delete")}" title="${t("delete")}">${icon("x")}</button></div>`);
+    $("[data-rmshift]", row).onclick = () => row.remove();
+    shiftsEl.append(row);
+  };
+  (ev?.shifts || []).forEach(shiftRow);
+  $("[data-addshift]", form).onclick = () => {
+    const v = (n, def) => { const x = $(`[name=${n}]`, form).value; return x.length === 10 ? x + def : x; };
+    const st = new Date(v("start", "T09:00")), en = new Date(v("end", "T13:00"));
+    const last = $$(".shift-row", shiftsEl).pop();
+    const from = last ? new Date($("[name=se]", last).value) : st;
+    const to = last ? new Date(Math.min(from.getTime() + (en - st), en.getTime())) : en;
+    shiftRow({ start: isNaN(from) ? new Date() : from, end: isNaN(to) || to <= from ? new Date(from.getTime() + 3 * 3600e3) : to, needed: 2 });
+  };
   const ad = $("[name=all_day]", form);
   ad.onchange = () => {
     ["start", "end"].forEach((n) => {
@@ -644,6 +716,10 @@ function eventForm(ev, day, rerender) {
     const description = progEd ? await progEd.getMd() : f.get("description");
     const body = { title: f.get("title"), start: toISO(f.get("start")), end: toISO(f.get("end"), true), all_day: all, location: f.get("location"), description };
     if (g) body.group_id = +g; else body.clear_group = true;
+    body.private = !!g && $("[name=private]", form).checked;
+    const shifts = $$(".shift-row", shiftsEl).map((r) => ({ id: +r.dataset.sid || undefined, start: new Date($("[name=ss]", r).value), end: new Date($("[name=se]", r).value), needed: +$("[name=sn]", r).value, label: $("[name=sl]", r).value.trim() }));
+    if (shifts.some((x) => isNaN(x.start) || isNaN(x.end) || x.end <= x.start || !(x.needed >= 1 && x.needed <= 50))) return toast(t("vol_bad"), true);
+    body.shifts = shifts.map((x) => ({ ...x, start: x.start.toISOString(), end: x.end.toISOString() }));
     try {
       const saved = ev ? await api("PATCH", `/api/events/${ev.id}`, body) : await api("POST", "/api/events", body);
       const sd = startOfDay(new Date(saved.start));
@@ -795,6 +871,12 @@ async function groupPage(g, rerender) {
     $("[data-vote]", body)?.addEventListener("click", () => voteSheet(g));
     $("[data-gedit]", body)?.addEventListener("click", () => groupForm(g, render));
     $("[data-mem]", body)?.addEventListener("click", () => membersSheet(g, render));
+    $$(".gm", body).forEach((el) => {
+      const uid = +$("[data-uid]", el)?.dataset.uid;
+      if (!uid || uid === S.me.id) return;
+      el.classList.add("tap"); el.title = t("write_to");
+      el.onclick = () => openDM(uid);
+    });
     $$("[data-ev]", body).forEach((b) => (b.onclick = () => {
       const e = events.find((x) => x.id == b.dataset.ev);
       cal.scope = String(g.id); store.set("calScope", cal.scope); cal.openId = e.id;
@@ -1105,12 +1187,15 @@ function startLive() {
       const m = ev.msg, mine = m.user_id === S.me.id;
       if (chat.live && chat.live.room === m.room_id && document.visibilityState === "visible") { chat.live.add(m); return; }
       if (mine) return;
-      if (m.mentions.includes(S.me.id)) {
+      if (m.meta?.kind === "volunteers" && !(m.meta.skip || []).includes(S.me.id)) {
+        toast(t("vol_alert").replace("{t}", m.meta.title), false, () => openEventAt(m.meta.event_id, new Date(m.meta.start)), "megaphone");
+      } else if (m.mentions.includes(S.me.id)) {
+        const dm = m.room_id < 0;
         const where = m.room_id === 0 ? t("general_chat") : ev.room_name;
         const go = () => { location.hash = `#/chat/${m.room_id}`; };
-        toast(`@${m.username} ${t("mentioned_you")} ${where}`, false, go, "at");
-        if ("Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
-          const n = new Notification(`${m.author} → ${where}`, { body: m.content.slice(0, 140), tag: "hiveloop-" + m.room_id });
+        toast(dm ? `${m.author} ${t("dm_wrote")}` : `@${m.username} ${t("mentioned_you")} ${where}`, false, go, dm ? "chat" : "at");
+        if (!pushOn && "Notification" in window && Notification.permission === "granted" && document.visibilityState !== "visible") {
+          const n = new Notification(dm ? m.author : `${m.author} → ${where}`, { body: m.content.slice(0, 140), tag: "chat" + m.room_id });
           n.onclick = () => { window.focus(); go(); n.close(); };
         }
       }
@@ -1165,6 +1250,38 @@ const dayLabel = (d) => sameDay(d, new Date()) ? t("today") : sameDay(d, addDays
 
 const quoteHTML = (r) => r ? `<button type="button" class="rquote ${r.is_ai ? "q-bot" : ""}" data-jump="${r.id}"><b>${esc(r.author || "—")}</b><span>${r.deleted ? esc(t("msg_deleted")) : esc(r.text)}</span></button>` : "";
 
+// volSummary: "sab 20 dic · 10:00–13:00 (1/2) · mancano 3"
+function volSummary(x) {
+  let lastDay = "";
+  const parts = (x.shifts || []).map((sh) => {
+    const s0 = new Date(sh.start), e0 = new Date(sh.end), d = fmt(s0, { weekday: "short", day: "numeric", month: "short" });
+    const p = `${d !== lastDay ? d + " · " : ""}${fmtTime(s0)}–${fmtTime(e0)} (${sh.have}/${sh.needed})${sh.label ? " " + sh.label : ""}`;
+    lastDay = d;
+    return p;
+  });
+  return `${parts.join(", ")} — ${missText(x.missing)}`;
+}
+function openEventAt(id, day) {
+  cal.openId = id; cal.cur = startOfDay(day); cal.sel = startOfDay(day);
+  const h0 = `#/calendar/${ymd(day)}`;
+  if (location.hash.startsWith("#/calendar")) { history.replaceState(null, "", h0); route(); } else location.hash = h0;
+}
+// dmPicker: choose someone to write to
+async function dmPicker() {
+  const people = (await api("GET", "/api/rooms/0/members").catch(() => [])).filter((u) => u.id !== S.me.id);
+  const body = h(`<div><input class="input" data-q placeholder="${t("dm_search")}" autocomplete="off" style="margin-bottom:10px"><div class="list" data-list></div></div>`);
+  const s = sheet({ title: t("dm_pick"), body });
+  const draw = (q = "") => {
+    const list = people.filter((u) => !q || (u.name || "").toLowerCase().includes(q) || u.username.toLowerCase().includes(q));
+    $("[data-list]", body).innerHTML = list.map((u) => `<button class="li dmpick" data-u="${u.id}"><span class="avatar" data-uid="${u.id}">${esc(initials(u))}</span><div class="grow"><div class="t">${esc(u.name || u.username)}</div><div class="s mono">@${esc(u.username)}</div></div>${icon("chat")}</button>`).join("") || `<div class="empty">—</div>`;
+    fillAvatars(body);
+    $$("[data-u]", body).forEach((b) => (b.onclick = () => { s.close(); openDM(+b.dataset.u); }));
+  };
+  $("[data-q]", body).oninput = (e) => draw(e.target.value.trim().toLowerCase());
+  draw();
+  if (!phone()) $("[data-q]", body).focus();
+}
+
 async function viewChat(v, args) {
   if (args[0] !== undefined && args[0] !== "") chat.room = +args[0];
   v.classList.add("ai-view");
@@ -1183,20 +1300,25 @@ async function viewChat(v, args) {
   const wrap = $(".ai", v), roomsEl = $("[data-rooms]", v), msgsEl = $("[data-msgs]", v), input = $("[data-input]", v), pop = $("[data-pop]", v);
   const unfit = fitPanel(wrap);
   $$("[data-notify]", v).forEach((b) => (b.onclick = async () => {
-    if (Notification.permission === "granted") return toast(t("notify_on"), false, null, "bell");
     if (Notification.permission === "denied") return toast(t("notify_denied"), true);
-    const p = await Notification.requestPermission();
-    if (p === "granted") { toast(t("notify_on"), false, null, "bell"); $$("[data-notify]", v).forEach((x) => x.classList.add("on")); }
+    if (await pushEnable()) { toast(t("notify_on"), false, null, "bell"); $$("[data-notify]", v).forEach((x) => x.classList.add("on")); }
   }));
 
   let members = [], lastId = 0, firstId = 0, loadingOld = false, readTimer;
   const markRead = () => { clearTimeout(readTimer); readTimer = setTimeout(() => api("POST", `/api/rooms/${chat.room}/read`).then(refreshBadges).catch(() => {}), 400); };
 
   const renderRooms = () => {
-    roomsEl.innerHTML = chat.rooms.map((r) => `<div class="conv room ${r.id === chat.room && !wrap.classList.contains("show-side") ? "on" : ""}" data-r="${r.id}">
+    const firstDM = chat.rooms.find((r) => r.dm)?.id;
+    roomsEl.innerHTML = chat.rooms.map((r) => r.dm ? `${r.id === firstDM ? `<div class="side-sub">${t("dm_title")}</div>` : ""}<div class="conv room dm ${r.id === chat.room && !wrap.classList.contains("show-side") ? "on" : ""}" data-r="${r.id}">
+      <span class="avatar" data-uid="${r.dm.id}">${esc(initials(r.dm))}</span>
+      <span class="t"><b>${esc(r.name)}</b><small>${r.last_text ? `${r.last_by === (S.me.name || S.me.username) ? t("you_cap") + ": " : ""}${esc(r.last_text)}` : "—"}</small></span>
+      ${r.mentions || (r.unread && r.id !== chat.room) ? `<span class="nb on">${r.unread || r.mentions}</span>` : ""}</div>` : `<div class="conv room ${r.id === chat.room && !wrap.classList.contains("show-side") ? "on" : ""}" data-r="${r.id}">
       <span class="rdot ${(r.id === 0 ? generalImg() : groupImg(groupById(r.id))) ? "pic" : ""}" style="--c:${esc(r.id === 0 ? generalColor() : r.color)}">${r.id === 0 ? (generalImg() ? `<img alt="" loading="lazy" src="${generalImg()}">` : icon("globe")) : groupById(r.id)?.image_v ? `<img alt="" loading="lazy" src="${groupImg(groupById(r.id))}">` : esc(r.name[0] || "#")}</span>
-      <span class="t"><b>${r.id || S.general?.color ? `<i class="rsw" style="--c:${esc(r.id ? r.color : S.general.color)}"></i>` : ""}${esc(roomName(r))}</b><small>${r.last_text ? `${esc(r.last_by.split(" ")[0])}: ${esc(r.last_text)}` : "—"}</small></span>
-      ${r.mentions ? `<span class="nb on at">@${r.mentions}</span>` : r.unread && r.id !== chat.room ? `<span class="nb on">${r.unread}</span>` : ""}</div>`).join("");
+      <span class="t"><b>${r.id || S.general?.color ? `<i class="rsw" style="--c:${esc(r.id ? r.color : S.general.color)}"></i>` : ""}${esc(roomName(r))}</b><small>${r.last_text ? `${r.last_by ? esc(r.last_by.split(" ")[0]) + ": " : ""}${esc(r.last_text)}` : "—"}</small></span>
+      ${r.mentions ? `<span class="nb on at">@${r.mentions}</span>` : r.unread && r.id !== chat.room ? `<span class="nb on">${r.unread}</span>` : ""}</div>`).join("")
+      + `<button type="button" class="conv room newdm" data-newdm><span class="rdot">${icon("edit")}</span><span class="t"><b>${t("dm_new")}</b></span></button>`;
+    fillAvatars(roomsEl);
+    $("[data-newdm]", roomsEl).onclick = dmPicker;
     $$("[data-r]", roomsEl).forEach((el) => (el.onclick = () => {
       if (phone()) location.hash = `#/chat/${el.dataset.r}`;
       else openRoom(+el.dataset.r);
@@ -1204,6 +1326,13 @@ async function viewChat(v, args) {
   };
 
   const msgEl = (m, prev) => {
+    if (m.meta?.kind === "volunteers") {
+      const x = m.meta, d0 = new Date(x.start);
+      const sys = h(`<div class="cm-sys vol" data-id="${m.id}"><button type="button">${icon("megaphone")}<span><b>${esc(t("vol_alert").replace("{t}", x.title))}</b><small>${esc(volSummary(x))}</small></span>${icon("right")}</button></div>`);
+      $("button", sys).onclick = () => openEventAt(x.event_id, d0);
+      sys._m = m;
+      return sys;
+    }
     if (m.meta?.system) {
       let txt = m.content;
       if (m.meta.key && t(m.meta.key) !== m.meta.key) txt = t(m.meta.key).replace(/\{(\w+)\}/g, (_, k) => m.meta.args?.[k] ?? "");
@@ -1269,23 +1398,31 @@ async function viewChat(v, args) {
     chat.live = { room: id, add, remove, resync, rooms: renderRooms, typing: (on) => $("[data-aityping]", v).classList.toggle("hidden", !on) };
     $("[data-aityping]", v).classList.add("hidden");
     const r = chat.rooms.find((x) => x.id === id);
+    const dm = !!r.dm;
+    wrap.classList.toggle("is-dm", dm);
     $("[data-rname]", v).textContent = roomName(r);
-    $("[data-rdot]", v).style.setProperty("--c", id === 0 ? generalColor() : r.color);
+    $("[data-rdot]", v).style.setProperty("--c", id === 0 ? generalColor() : r.color || "transparent");
+    $("[data-rdot]", v).classList.toggle("hidden", dm);
+    $("[data-rdocs]", v).classList.toggle("hidden", dm);
+    $("[data-attach]", v).classList.toggle("hidden", dm);
     leaderUI();
-    aiQuotaFor(id).then((q) => { if (chat.room === id) aiCount($("[data-rquota]", v), q); });
+    if (dm) aiCount($("[data-rquota]", v), null);
+    else aiQuotaFor(id).then((q) => { if (chat.room === id) aiCount($("[data-rquota]", v), q); });
     renderRooms();
     msgsEl.innerHTML = `<div class="typing" style="margin:auto"><i></i><i></i><i></i></div>`;
     const [ms, list] = await Promise.all([api("GET", `/api/rooms/${id}/members`), api("GET", `/api/rooms/${id}/messages`)]);
     if (chat.room !== id) return;
     members = ms;
-    $("[data-rcount]", v).textContent = `· ${members.length} ${members.length === 1 ? t("member") : t("members")}`;
+    $("[data-rcount]", v).textContent = dm ? `· ${t("dm_short")}` : `· ${members.length} ${members.length === 1 ? t("member") : t("members")}`;
     msgsEl.innerHTML = list.length ? "" : `<div class="empty"><span class="serif">${esc(roomName(r))}</span>${t("no_messages")}</div>`;
     let prev = null;
     list.forEach((m) => { msgsEl.append(msgEl(m, prev)); prev = m; });
     firstId = list[0]?.id || 0; lastId = list.length ? list[list.length - 1].id : 0;
+    if (dm && !list.length) msgsEl.innerHTML = `<div class="empty"><span class="serif">${esc(roomName(r))}</span>${t("dm_hint")}</div>`;
     msgsEl.scrollTop = msgsEl.scrollHeight;
     markRead();
-    if (!phone()) input.focus({ preventScroll: true });
+    if (chat.prefill) { input.value = chat.prefill; chat.prefill = ""; input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+    else if (!phone()) input.focus({ preventScroll: true });
   }
   async function resync() {
     if (!lastId) return openRoom(chat.room);
@@ -1385,7 +1522,8 @@ async function viewChat(v, args) {
   const showPop = () => {
     const q = query();
     if (q === null) return hidePop();
-    const all = [...(S.ai ? [{ username: "ai", name: "Hiveloop AI", id: -1 }] : []), { username: "tutti", name: t("everyone"), id: 0 }, ...members.filter((m) => m.id !== S.me.id)];
+    const dmRoom = chat.room < 0;
+    const all = [...(S.ai && !dmRoom ? [{ username: "ai", name: "Hiveloop AI", id: -1 }] : []), ...(dmRoom ? [] : [{ username: "tutti", name: t("everyone"), id: 0 }]), ...members.filter((m) => m.id !== S.me.id)];
     matches = all.filter((m) => m.username.toLowerCase().startsWith(q) || (m.name || "").toLowerCase().split(/\s+/).some((p) => p.startsWith(q))).slice(0, 6);
     if (!matches.length) return hidePop();
     sel = Math.min(sel, matches.length - 1);
@@ -1981,6 +2119,11 @@ async function viewSettings(v) {
           <button type="button" data-v="">${t("btn_both")}</button><button type="button" data-v="icons">${t("btn_icons")}</button><button type="button" data-v="text">${t("btn_text")}</button></div></div>
         <div class="preview-btns"><button type="button" class="btn">${icon("edit")}${t("edit")}</button><button type="button" class="btn primary">${icon("check")}${t("save")}</button></div>
       </div>
+      <div class="card rv notifcard" style="padding:20px;--i:1" data-notif>
+        <div class="field" style="margin:0"><span>${t("notif_title")}</span></div>
+        <p class="muted" style="margin:0;font-size:13.5px">${t("notif_hint")}</p>
+        <div data-nstate class="muted">…</div>
+      </div>
       <form class="card rv" style="padding:20px;--i:1" data-pw>
         <div class="field"><span>${t("change_password")}</span></div>
         <label class="field"><span>${t("old_password")}</span><input class="input" type="password" name="old" required autocomplete="current-password"></label>
@@ -1991,6 +2134,20 @@ async function viewSettings(v) {
       <a class="card rv guide-card" style="--i:3" href="#/help">${icon("help")}<span><b>${t("nav_help")}</b><small>${t("help_card")}</small></span>${icon("right")}</a></div>
       <div class="logout-row"><button class="btn danger" data-out>${icon("logout")}${t("logout")}</button></div>`;
   $("[data-install-card]", v)?.addEventListener("click", installApp);
+  // notifications on this device
+  const nEl = $("[data-nstate]", v);
+  const drawNotif = async () => {
+    if (isAndroidApp()) { nEl.innerHTML = `<p style="margin:0">${icon("android")} ${t("notif_android")}</p>`; return; }
+    const st = await pushState();
+    if (st === "unsupported") { nEl.innerHTML = `<p style="margin:0">${t(isIOS() && !isStandalone() ? "notif_ios" : "notif_unsupported")}</p>`; return; }
+    if (st === "denied") { nEl.innerHTML = `<p style="margin:0">${t("notif_denied")}</p>`; return; }
+    nEl.innerHTML = `<div class="nrow"><span class="nst ${st === "on" ? "on" : ""}">${icon(st === "on" ? "bell" : "x")}${t(st === "on" ? "notif_on_dev" : "notif_off_dev")}</span><span class="grow"></span>
+      ${st === "on" ? `<button type="button" class="btn sm" data-ntest>${icon("send")}${t("notif_test")}</button><button type="button" class="btn sm ghost" data-noff>${t("notif_disable")}</button>` : `<button type="button" class="btn sm primary" data-non>${icon("bell")}${t("notif_enable")}</button>`}</div>`;
+    $("[data-non]", nEl)?.addEventListener("click", async () => { if (await pushEnable()) toast(t("notify_on"), false, null, "bell"); drawNotif(); });
+    $("[data-noff]", nEl)?.addEventListener("click", async () => { await pushDisable().catch(() => {}); drawNotif(); });
+    $("[data-ntest]", nEl)?.addEventListener("click", async () => { try { await api("POST", "/api/push/test"); toast(t("notif_test_sent"), false, null, "bell"); } catch (e) { fail(e); } });
+  };
+  drawNotif();
   // avatar
   const saveAvatar = async (o) => {
     try {
@@ -2010,7 +2167,7 @@ async function viewSettings(v) {
     applyPrefs(S.prefs); showPrefs();
     try { await api("PATCH", "/api/me", { prefs: S.prefs }); } catch (e) { S.prefs = before; applyPrefs(before); showPrefs(); fail(e); }
   }));
-  $("[data-out]", v).onclick = async () => { await api("POST", "/api/logout").catch(() => {}); S.me = null; chat.es?.close(); location.hash = ""; renderLogin(); };
+  $("[data-out]", v).onclick = async () => { await pushDisable().catch(() => {}); await api("POST", "/api/logout").catch(() => {}); S.me = null; chat.es?.close(); location.hash = ""; renderLogin(); };
   $$("[data-l]", v).forEach((b) => (b.onclick = async () => {
     try { await api("PATCH", "/api/me", { lang: b.dataset.l }); S.me.lang = b.dataset.l; setLang(b.dataset.l); store.set("lang", b.dataset.l); renderShell(); route(); refreshBadges(); } catch (e) { fail(e); }
   }));
@@ -2043,7 +2200,10 @@ const pwa = { prompt: null };
 const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const isMobile = () => matchMedia("(max-width: 760px), (pointer: coarse)").matches;
-if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+  navigator.serviceWorker.addEventListener("message", (e) => { if (e.data?.type === "open" && typeof e.data.url === "string" && e.data.url.startsWith(location.origin)) location.href = e.data.url; });
+}
 window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); pwa.prompt = e; showInstallBanner(); $$("[data-install]").forEach((b) => b.classList.remove("hidden")); });
 window.addEventListener("appinstalled", () => { pwa.prompt = null; $(".install-banner")?.remove(); toast(t("installed")); });
 
@@ -2134,6 +2294,54 @@ function startUpdateChecks() {
 }
 
 /* ═════════ boot ═════════ */
+/* ═════════ notifications (Web Push) ═════════ */
+let pushOn = false;
+const isAndroidApp = () => /HiveloopAndroid/.test(navigator.userAgent);
+const pushSupported = () => "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4)), (c) => c.charCodeAt(0));
+async function pushSub() {
+  const reg = await navigator.serviceWorker.ready;
+  return { reg, sub: await reg.pushManager.getSubscription() };
+}
+async function pushState() {
+  if (!pushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  const { sub } = await pushSub();
+  return sub && Notification.permission === "granted" ? "on" : "off";
+}
+async function pushEnable() {
+  if (isAndroidApp()) { toast(t("notif_android")); return false; }
+  if (!pushSupported()) { toast(t(isIOS() && !isStandalone() ? "notif_ios" : "notif_unsupported"), true); return false; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { if (perm === "denied") toast(t("notif_denied"), true); return false; }
+  try {
+    let { reg, sub } = await pushSub();
+    if (!sub) {
+      const { key } = await api("GET", "/api/push/key");
+      sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(key) });
+    }
+    await api("POST", "/api/push/subscribe", sub.toJSON());
+    pushOn = true;
+    return true;
+  } catch (e) { fail(e); return false; }
+}
+async function pushDisable() {
+  pushOn = false;
+  if (!pushSupported()) return;
+  const { sub } = await pushSub();
+  if (!sub) return;
+  await api("POST", "/api/push/unsubscribe", { endpoint: sub.endpoint }).catch(() => {});
+  await sub.unsubscribe();
+}
+// pushSync: tell the server again which device this is (the address can change, or the account)
+async function pushSync() {
+  try {
+    if (!pushSupported() || Notification.permission !== "granted") return;
+    const { sub } = await pushSub();
+    if (sub) { await api("POST", "/api/push/subscribe", sub.toJSON()); pushOn = true; }
+  } catch {}
+}
+
 async function boot() {
   if (!upd.timer) startUpdateChecks();
   setLang(store.get("lang", (navigator.language || "").toLowerCase().startsWith("it") ? "it" : "en"));
@@ -2145,6 +2353,7 @@ async function boot() {
   startLive();
   refreshBadges();
   pendingBadge();
+  pushSync();
   setTimeout(showInstallBanner, 1500);
 }
 function pendingBadge() {

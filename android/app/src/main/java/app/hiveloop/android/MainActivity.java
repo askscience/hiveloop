@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.os.Build;
@@ -128,8 +129,30 @@ public class MainActivity extends Activity {
             }
         });
 
-        if (state != null) web.restoreState(state);
+        // notifications: periodic check, and ask once for permission (Android 13+)
+        NotifyJob.channel(this);
+        NotifyJob.schedule(this);
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission("android.permission.POST_NOTIFICATIONS") != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 7);
+        }
+
+        String opened = ownUrl(getIntent());
+        if (opened != null) web.loadUrl(opened);
+        else if (state != null) web.restoreState(state);
         else web.loadUrl(BuildConfig.HIVELOOP_URL);
+    }
+
+    /** a notification opens a page of Hiveloop */
+    private String ownUrl(Intent i) {
+        Uri d = i == null ? null : i.getData();
+        return d != null && host != null && host.equals(d.getHost()) && "https".equals(d.getScheme()) ? d.toString() : null;
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        String opened = ownUrl(intent);
+        if (opened != null && web != null) web.loadUrl(opened);
     }
 
     private void openExternal(Uri u) {
@@ -176,11 +199,16 @@ public class MainActivity extends Activity {
         super.onPause();
         pausedAt = System.currentTimeMillis();
         CookieManager.getInstance().flush();
+        NotifyJob.appVisible = false;
+        // what was shown inside the app is not notified again later
+        Thread t = new Thread(() -> { try { NotifyJob.check(getApplicationContext(), false); } catch (Exception ignored) { } });
+        t.start();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        NotifyJob.appVisible = true;
         // back after more than 30 minutes: start fresh (latest interface and data)
         if (pausedAt > 0 && System.currentTimeMillis() - pausedAt > 30 * 60 * 1000) web.reload();
     }

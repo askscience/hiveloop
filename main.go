@@ -96,6 +96,7 @@ func main() {
 		log.Fatalf("bootstrap: %v", err)
 	}
 	go app.janitor()
+	go app.reminderLoop()
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
@@ -176,6 +177,9 @@ func (a *App) routes() http.Handler {
 	mux.Handle("PUT /api/events/{id}/signup", a.auth(a.handleSignup))
 	mux.Handle("DELETE /api/events/{id}/signup", a.auth(a.handleCancelSignup))
 	mux.Handle("DELETE /api/events/{id}/signups/{uid}", a.auth(a.handleCancelSignup))
+	mux.Handle("PUT /api/events/{id}/shifts/{sid}/signup", a.auth(a.handleJoinShift))
+	mux.Handle("DELETE /api/events/{id}/shifts/{sid}/signup", a.auth(a.handleLeaveShift))
+	mux.Handle("DELETE /api/events/{id}/shifts/{sid}/signups/{uid}", a.auth(a.handleLeaveShift))
 	mux.Handle("GET /api/events/{id}/link", a.auth(a.handleGetEventLink))
 	mux.Handle("POST /api/events/{id}/link", a.auth(a.handleGetEventLink))
 	mux.Handle("DELETE /api/events/{id}/link", a.auth(a.handleDeleteEventLink))
@@ -211,6 +215,14 @@ func (a *App) routes() http.Handler {
 	mux.Handle("POST /api/rooms/{id}/read", a.auth(a.handleRoomRead))
 	mux.Handle("DELETE /api/room-messages/{id}", a.auth(a.handleDeleteRoomMessage))
 	mux.Handle("GET /api/stream", a.auth(a.handleStream))
+	mux.Handle("POST /api/dm", a.auth(a.handleOpenDM))
+
+	// notifications
+	mux.Handle("GET /api/push/key", a.auth(a.handlePushKey))
+	mux.Handle("POST /api/push/subscribe", a.auth(a.handlePushSubscribe))
+	mux.Handle("POST /api/push/unsubscribe", a.auth(a.handlePushUnsubscribe))
+	mux.Handle("POST /api/push/test", a.auth(a.handlePushTest))
+	mux.Handle("GET /api/notifications", a.auth(a.handleNotifications))
 
 	// AI chat
 	mux.Handle("GET /api/chats", a.aiOn(a.auth(a.handleListChats)))
@@ -279,6 +291,7 @@ func (a *App) janitor() {
 	t := time.NewTicker(time.Hour)
 	for range t.C {
 		a.db.Exec(`DELETE FROM sessions WHERE expires_at < ?`, time.Now().Unix())
+		a.pruneNotifications()
 		// sign-up requests nobody approved in 14 days are dropped
 		a.db.Exec(`DELETE FROM users WHERE status='pending' AND created_at < ?`, time.Now().Add(-14*24*time.Hour).Unix())
 		for _, l := range []*rateLimiter{a.rl, a.rlUser, a.rlReg, a.rlAI, a.rlMsg} {

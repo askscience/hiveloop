@@ -164,6 +164,10 @@ func OpenDB(path string) (*DB, error) {
 		groupLimitsSchema,
 		`CREATE UNIQUE INDEX IF NOT EXISTS public_links_event ON public_links(event_id) WHERE kind='event'`,
 		`CREATE UNIQUE INDEX IF NOT EXISTS public_links_day ON public_links(day, scope) WHERE kind='day'`,
+		`ALTER TABLE events ADD COLUMN private INTEGER NOT NULL DEFAULT 0`,
+		shiftsSchema,
+		dmSchema,
+		pushSchema,
 	} {
 		db.Exec(m)
 	}

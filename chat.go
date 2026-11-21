@@ -74,6 +74,39 @@ func p(typ, desc string) map[string]any { return map[string]any{"type": typ, "de
 
 func toolsFor(u *User) []oTool { return aiTools }
 
+var shiftsParam = map[string]any{
+	"type":        "array",
+	"description": "Volunteers needed, as shifts inside the event, e.g. [{\"start\":\"2026-12-20T10:00\",\"end\":\"2026-12-20T13:00\",\"needed\":2}]. For the whole event use its own start and end. On update the list replaces the existing shifts (pass the id of a shift to keep its volunteers); [] removes them all.",
+	"items": map[string]any{"type": "object", "properties": map[string]any{
+		"id":     p("integer", "Existing shift id (update only)"),
+		"start":  p("string", "YYYY-MM-DDTHH:MM local time"),
+		"end":    p("string", "YYYY-MM-DDTHH:MM local time"),
+		"needed": p("integer", "How many volunteers"),
+		"label":  p("string", "Optional short task, e.g. \"till\""),
+	}, "required": []string{"start", "end", "needed"}},
+}
+
+// shiftsArg reads the shifts parameter (nil when absent).
+func shiftsArg(args map[string]any) *[]ShiftInput {
+	raw, ok := args["shifts"]
+	if !ok {
+		return nil
+	}
+	b, _ := json.Marshal(raw)
+	var out []ShiftInput
+	if json.Unmarshal(b, &out) != nil {
+		return nil
+	}
+	return &out
+}
+
+func boolArg(args map[string]any, k string) *bool {
+	if v, ok := args[k].(bool); ok {
+		return &v
+	}
+	return nil
+}
+
 var aiTools = []oTool{
 	tool("list_groups", "List all groups with id, name and whether the current user is a member.", map[string]any{}),
 	tool("list_events", "List calendar events between two dates.", map[string]any{
@@ -97,6 +130,8 @@ var aiTools = []oTool{
 		"description": p("string", "Detailed program in Markdown (schedule, agenda, notes)"),
 		"location":    p("string", "Place (optional): precise name and town, e.g. \"Town Hall, Main Street 1, Springfield\", or a Google Maps link. It becomes a map link."),
 		"group_id":    p("integer", "Group id the event belongs to. Omit for a general event (admins only)."),
+		"private":     p("boolean", "true = internal organisational event, visible only to the group's members (needs group_id)"),
+		"shifts":      shiftsParam,
 	}, "title", "start"),
 	tool("update_event", "Modify an existing event. Only pass fields to change.", map[string]any{
 		"id":          p("integer", "Event id"),
@@ -106,7 +141,17 @@ var aiTools = []oTool{
 		"description": p("string", "New Markdown description"),
 		"location":    p("string", "New location"),
 		"group_id":    p("integer", "Move to group id"),
+		"private":     p("boolean", "true = only the group's members see it, false = everyone"),
+		"shifts":      shiftsParam,
 	}, "id"),
+	tool("signup_shift", "Sign the user up as a volunteer for one shift of an event (shifts are listed by list_events with their id, time, needed and people). Only for the person who asked.", map[string]any{
+		"event_id": p("integer", "Event id"),
+		"shift_id": p("integer", "Shift id"),
+	}, "event_id", "shift_id"),
+	tool("cancel_shift", "Take the user off a volunteer shift.", map[string]any{
+		"event_id": p("integer", "Event id"),
+		"shift_id": p("integer", "Shift id"),
+	}, "event_id", "shift_id"),
 	tool("delete_event", "Remove an event from the calendar.", map[string]any{"id": p("integer", "Event id")}, "id"),
 	tool("share_event_link", "Get a PUBLIC link to one event, to send to people outside the app (no account needed): they see date, time, place and program and can add it to their calendar; participants' names are never shown. Reuses the existing link if there is one. Only for events the user can edit. disable=true turns the link off.", map[string]any{
 		"event_id": p("integer", "Event id (find it with list_events)"),
@@ -242,7 +287,8 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 		return out(evs, fmt.Sprintf("%d", len(evs)))
 
 	case "create_event":
-		in := EventInput{Title: str("title"), Start: str("start"), End: str("end"), Description: str("description"), Location: str("location"), GroupID: num("group_id")}
+		in := EventInput{Title: str("title"), Start: str("start"), End: str("end"), Description: str("description"), Location: str("location"), GroupID: num("group_id"),
+			Private: boolArg(args, "private"), Shifts: shiftsArg(args)}
 		if v, ok := args["all_day"].(bool); ok {
 			in.AllDay = &v
 		}
@@ -259,7 +305,8 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 		if id == nil {
 			return fail(errBadInput)
 		}
-		e, err := a.updateEvent(u, *id, EventInput{Title: str("title"), Start: str("start"), End: str("end"), Description: str("description"), Location: str("location"), GroupID: num("group_id")})
+		e, err := a.updateEvent(u, *id, EventInput{Title: str("title"), Start: str("start"), End: str("end"), Description: str("description"), Location: str("location"), GroupID: num("group_id"),
+			Private: boolArg(args, "private"), Shifts: shiftsArg(args)})
 		if err != nil {
 			return fail(err)
 		}
@@ -281,6 +328,25 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 			return fail(err)
 		}
 		r, s := out(map[string]any{"event": e.Title, "booking": e.MySignup}, e.Title)
+		s.Ref = map[string]any{"event_id": e.ID, "start": e.Start}
+		return r, s
+
+	case "signup_shift", "cancel_shift":
+		eid, sid := num("event_id"), num("shift_id")
+		if eid == nil || sid == nil {
+			return fail(errBadInput)
+		}
+		var e Event
+		var err error
+		if name == "signup_shift" {
+			e, err = a.joinShift(u, *eid, *sid)
+		} else {
+			e, err = a.leaveShift(u, *eid, *sid, u.ID)
+		}
+		if err != nil {
+			return fail(err)
+		}
+		r, s := out(map[string]any{"event": e.Title, "shifts": e.Shifts}, e.Title)
 		s.Ref = map[string]any{"event_id": e.ID, "start": e.Start}
 		return r, s
 
@@ -593,6 +659,8 @@ User: %s (role %s). Groups of the user: %s.
 %s
 You can use tools to read/manage the shared calendar, read the user's documents and those shared with them, share the user's own documents with groups or everyone (only when asked), change existing Markdown documents the user can edit (update_document: read first, then replace or append), look at their previous versions (list_document_versions, read_document_version — the last 10 are kept; use them when asked what changed or to recover lost parts, and compare with the current text) and restore one only when explicitly asked, search the web (web_search, then read_webpage for details) and create Markdown (.md) files in their private space. You cannot create or change any other file type, and you cannot delete documents.
 Anyone can mark their attendance at any event with signup_event. In Italian this is called "presenza" ("segnare la presenza", "le mie presenze"): never call it "prenotazione". When the user wants to join / take part in / be present at an event, first identify the event (list_events), then ASK what time they will be there — the whole event or a time slot (from–to) — unless they already said it; never invent the time. list_events shows who will be present (participants) and the user's own attendance (my_signup).
+Private events: a group can keep internal organisational events (meetings, planning) visible only to its members (and admins): create_event/update_event with private=true and a group_id. They can never be shared outside the app. list_events marks them with "private": true; never mention a private event to someone who did not get it from list_events.
+Volunteers: an event can need volunteers in shifts (e.g. Christmas stall 10:00–13:00, 2 volunteers): pass shifts to create_event/update_event. list_events shows each shift with needed, people and the event's "missing" count (volunteers still needed in shifts that have not started); to answer "where are volunteers missing?" look at events with missing > 0. signup_shift / cancel_shift sign up only the person who asked. The group is reminded automatically 3 days, 1 day and 3 hours before a shift that is still short. Every event shows who created it (author): people can write to them in a private message from the event.
 To share an event or a day's program with people OUTSIDE the app (e.g. "give me a link to send", "share Saturday's programme with people who want to join"), use share_event_link or share_day_link and give the user the exact url returned, as a Markdown link; mention that it can be turned off any time. Create these public links only when the user asks to share externally.
 When asked to plan something, create detailed events with a Markdown program in the description. Always check ids with list_groups / list_events before updating or deleting. Before deleting, make sure the user clearly asked for it. Dates must be YYYY-MM-DDTHH:MM in local time.
 Work agentically: for a request with several steps (e.g. "search the web and update the document"), plan it and carry out ALL the steps yourself in this same turn, one tool after another — research, then the action (update_document / create_markdown / create_event / signup_event…), then a short final answer saying what you changed. Never stop after the research and never ask for permission for something the user already asked you to do. Keep research short: at most 4–5 web searches and the 2–3 most useful pages; if information is missing, still complete the task with what you found and mark the missing parts clearly (e.g. "da verificare").

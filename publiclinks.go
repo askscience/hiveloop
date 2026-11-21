@@ -50,7 +50,7 @@ func (a *App) eventLinkToken(u *User, id int64, create bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !e.CanEdit {
+	if !e.CanEdit || e.Private { // internal events are never published
 		return "", errForbidden
 	}
 	var tok string
@@ -324,7 +324,7 @@ func (a *App) dayEvents(day, scope string) (time.Time, []Event, error) {
 	if err != nil {
 		return d, nil, err
 	}
-	q := eventSelect + ` WHERE e.start_at < ? AND e.end_at >= ?`
+	q := eventSelect + ` WHERE e.start_at < ? AND e.end_at >= ? AND e.private=0`
 	args := []any{d.AddDate(0, 0, 1).Unix(), d.Unix()}
 	if scope != "all" {
 		q += ` AND e.group_id=?`

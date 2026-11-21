@@ -15,11 +15,17 @@ is designed to be simple enough for people who are not used to apps.
 
 - **Calendar** with month and agenda views, filters per group, detailed programmes written in a
   visual editor, and **attendance**: people mark when they will be there (whole event or a time slot).
+- **Volunteer shifts**: an event can say how many people it needs and when (e.g. 10:00–13:00, 2
+  volunteers); anyone can sign up, and the group is reminded 3 days, 1 day and 3 hours before a
+  shift that is still short.
+- **Private group events** for internal organisation, visible only to the group (and admins).
 - **Public links** for an event or a whole day, readable without an account, with "add to calendar" (.ics).
 - **Groups**, each with its own chat, documents, cover photo and an elected **group leader**
   (majority vote in the group chat) who can manage members and the group's documents.
-- **Chats** for every group plus a general one: @mentions, replies (swipe left on a phone),
-  live updates and notifications.
+- **Chats** for every group plus a general one, and **private messages** between two people:
+  @mentions, replies (swipe left on a phone), live updates.
+- **Notifications** even when the app is closed: Web Push (standard library only, VAPID keys are
+  generated on first use) and a periodic check in the Android app, no Google services needed.
 - **Documents**: private space per person, sharing with groups or everyone, previews (PDF, images,
   video, text), a visual editor for Markdown documents and **version history** (last 10).
 - **AI assistant** (optional): works with the user's own permissions; it can read documents, write

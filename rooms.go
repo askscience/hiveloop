@@ -17,15 +17,16 @@ import (
 )
 
 type Room struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Color    string `json:"color"`
-	IsMember bool   `json:"is_member"`
-	Unread   int    `json:"unread"`
-	Mentions int    `json:"mentions"`
-	LastText string `json:"last_text"`
-	LastAt   int64  `json:"last_at"`
-	LastBy   string `json:"last_by"`
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	Color    string  `json:"color"`
+	IsMember bool    `json:"is_member"`
+	Unread   int     `json:"unread"`
+	Mentions int     `json:"mentions"`
+	LastText string  `json:"last_text"`
+	LastAt   int64   `json:"last_at"`
+	LastBy   string  `json:"last_by"`
+	DM       *DMPeer `json:"dm,omitempty"`
 }
 
 type RoomMsg struct {
@@ -58,8 +59,12 @@ type MsgDoc struct {
 	Mime string `json:"mime"`
 }
 
-// canRoom: general room is open to all; group rooms to members and admins.
+// canRoom: general room is open to all; group rooms to members and admins; a direct
+// conversation only to its two people.
 func (a *App) canRoom(u *User, room int64) bool {
+	if isDM(room) {
+		return a.inDM(u.ID, room)
+	}
 	if room == 0 || u.IsAdmin() {
 		return room == 0 || a.groupExists(room)
 	}
@@ -224,6 +229,8 @@ func (a *App) handleListRooms(w http.ResponseWriter, r *http.Request) {
 			rooms = append(rooms, Room{ID: g.ID, Name: g.Name, Color: g.Color, IsMember: g.IsMember})
 		}
 	}
+	nGroups := len(rooms)
+	rooms = append(rooms, a.dmRooms(u)...)
 	for i := range rooms {
 		rm := &rooms[i]
 		var last int64
@@ -236,6 +243,7 @@ func (a *App) handleListRooms(w http.ResponseWriter, r *http.Request) {
 			rm.LastText = string([]rune(rm.LastText)[:80]) + "…"
 		}
 	}
+	sortDMs(rooms[nGroups:])
 	jsonOK(w, rooms)
 }
 
@@ -276,7 +284,11 @@ func (a *App) handleRoomMessages(w http.ResponseWriter, r *http.Request) {
 func (a *App) roomMembers(room int64) []User {
 	q := `SELECT id,username,name,role,lang,created_at FROM users WHERE status='active'`
 	args := []any{}
-	if room != 0 {
+	if isDM(room) {
+		x, y, _ := a.dmPair(room)
+		q += ` AND id IN (?,?)`
+		args = append(args, x, y)
+	} else if room != 0 {
 		q += ` AND (id IN (SELECT user_id FROM group_members WHERE group_id=?) OR role IN ('admin','superadmin'))`
 		args = append(args, room)
 	}
@@ -327,6 +339,10 @@ func (a *App) handlePostRoomMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	in.Content = strings.TrimSpace(in.Content)
 	if (in.Content == "" && in.DocID == nil) || len(in.Content) > 8000 {
+		jsonErr(w, 400, "bad_request")
+		return
+	}
+	if isDM(room) && in.DocID != nil { // documents are shared with groups, not in direct messages
 		jsonErr(w, 400, "bad_request")
 		return
 	}
@@ -384,6 +400,12 @@ func (a *App) handlePostRoomMessage(w http.ResponseWriter, r *http.Request) {
 			targets[uid] = true
 		}
 	}
+	if isDM(room) { // the other person is always notified; no assistant here
+		askAI = false
+		for _, m := range members {
+			targets[m.ID] = true
+		}
+	}
 	delete(targets, u.ID)
 	for uid := range targets {
 		a.db.Exec(`INSERT OR IGNORE INTO mentions(message_id,user_id) VALUES(?,?)`, id, uid)
@@ -395,6 +417,7 @@ func (a *App) handlePostRoomMessage(w http.ResponseWriter, r *http.Request) {
 	a.fillMentions(ms)
 	name, _ := a.roomName(room)
 	a.broadcast(room, map[string]any{"type": "message", "msg": ms[0], "room_name": name})
+	a.notifyMessage(u, room, name, ms[0], targets)
 	if askAI && a.aiEnabled() && a.rlAI.allow(fmt.Sprint(u.ID)) {
 		if why := a.useAI(u.ID, room); why == "" {
 			go a.roomAI(u, room, name, id)
@@ -489,7 +512,8 @@ func (a *App) handleDeleteRoomMessage(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 404, "not_found")
 		return
 	}
-	if !(u.IsAdmin() || (uid.Valid && uid.Int64 == u.ID)) {
+	mine := uid.Valid && uid.Int64 == u.ID
+	if !(mine || (u.IsAdmin() && !isDM(room))) { // nobody else touches direct messages
 		jsonErr(w, 403, "forbidden")
 		return
 	}
@@ -515,4 +539,60 @@ func (a *App) handleRoomRead(w http.ResponseWriter, r *http.Request) {
 func oneLine(s string) string {
 	s = strings.NewReplacer("**", "", "__", "", "`", "", "#", "").Replace(s)
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// notifyMessage pushes a direct message, a mention or a reply to the people concerned.
+func (a *App) notifyMessage(from *User, room int64, roomName string, m RoomMsg, targets map[int64]bool) {
+	if len(targets) == 0 {
+		return
+	}
+	ids := make([]int64, 0, len(targets))
+	for id := range targets {
+		ids = append(ids, id)
+	}
+	author := from.Name
+	if author == "" {
+		author = from.Username
+	}
+	text := m.Content
+	if text == "" && m.Doc != nil {
+		text = "📎 " + m.Doc.Name
+	}
+	langs := a.userLangs(ids)
+	a.notify(ids, func(uid int64) Notice {
+		lang := langs[uid]
+		title := author
+		switch {
+		case isDM(room):
+		case room == 0:
+			title += " · " + tr(lang, "Generale", "General")
+		default:
+			title += " · " + roomName
+		}
+		return Notice{Title: title, Body: oneLine(text), URL: fmt.Sprintf("/#/chat/%d", room), Tag: fmt.Sprintf("chat%d", room)}
+	})
+}
+
+func (a *App) userLangs(ids []int64) map[int64]string {
+	out := map[int64]string{}
+	if len(ids) == 0 {
+		return out
+	}
+	list := make([]string, len(ids))
+	for i, id := range ids {
+		list[i] = strconv.FormatInt(id, 10)
+	}
+	rows, err := a.db.Query(`SELECT id,lang FROM users WHERE id IN (` + strings.Join(list, ",") + `)`)
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var l string
+		if rows.Scan(&id, &l) == nil {
+			out[id] = l
+		}
+	}
+	return out
 }
