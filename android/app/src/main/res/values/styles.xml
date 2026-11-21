@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Hiveloop" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/hiveloop_bg</item>
+        <item name="android:statusBarColor">@color/hiveloop_bg</item>
+        <item name="android:navigationBarColor">@color/hiveloop_bg</item>
+        <item name="android:colorAccent">@color/hiveloop_fg</item>
+    </style>
+    <color name="hiveloop_bg">#0c0c0b</color>
+    <color name="hiveloop_fg">#f2f0e9</color>
+</resources>

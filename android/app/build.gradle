@@ -1,0 +1,48 @@
+plugins {
+    id "com.android.application"
+}
+
+// Web address the app opens. CI passes -PhiveloopUrl=... (see .github/workflows/android.yml).
+def hiveloopUrl = project.findProperty("hiveloopUrl") ?: "https://hiveloop.example.org/"
+
+android {
+    namespace "app.hiveloop.android"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "app.hiveloop.android"
+        minSdk 24
+        targetSdk 35
+        versionCode((project.findProperty("hiveloopVersionCode") ?: "1") as int)
+        versionName project.findProperty("hiveloopVersionName") ?: "1.0"
+        buildConfigField "String", "HIVELOOP_URL", "\"${hiveloopUrl}\""
+    }
+
+    buildFeatures { buildConfig true }
+
+    // The signing key never lives in the repo: CI writes it from a GitHub secret.
+    signingConfigs {
+        release {
+            def ks = System.getenv("HIVELOOP_KEYSTORE")
+            if (ks) {
+                storeFile file(ks)
+                storeType "pkcs12"
+                storePassword System.getenv("HIVELOOP_KEYSTORE_PASSWORD")
+                keyAlias "hiveloop"
+                keyPassword System.getenv("HIVELOOP_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig System.getenv("HIVELOOP_KEYSTORE") ? signingConfigs.release : signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

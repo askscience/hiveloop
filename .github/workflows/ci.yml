@@ -1,0 +1,47 @@
+name: CI
+
+# Tests every push and pull request. Tagged versions (v*) also get release binaries
+# for linux amd64, arm64 and 386.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Vet and test
+        run: go vet ./... && go test ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build
+        run: |
+          mkdir -p out
+          for arch in amd64 arm64 386; do
+            GOOS=linux GOARCH=$arch CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o out/hiveloop-linux-$arch .
+          done
+          (cd out && sha256sum hiveloop-linux-* > SHA256SUMS)
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" out/* --title "Hiveloop ${GITHUB_REF_NAME}" --generate-notes

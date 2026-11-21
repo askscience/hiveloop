@@ -1,0 +1,73 @@
+name: Android app
+
+# Builds the Android app (a full-screen web view on your Hiveloop address), signs it with
+# your own key (repository secrets, see android/README.md) and publishes it as the
+# "android-latest" release. Run it by hand from the Actions tab.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Address the app opens"
+        default: "https://hiveloop.example.org/"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$KS_B64" ]; then
+            echo "::error::Missing secret ANDROID_KEYSTORE_B64 (see android/README.md)"; exit 1
+          fi
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/hiveloop-release.p12"
+          echo "HIVELOOP_KEYSTORE=$RUNNER_TEMP/hiveloop-release.p12" >> "$GITHUB_ENV"
+
+      - name: Build APK
+        working-directory: android
+        env:
+          HIVELOOP_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          HIVELOOP_URL: ${{ github.event.inputs.url || vars.HIVELOOP_URL || 'https://hiveloop.example.org/' }}
+        run: |
+          gradle --no-daemon assembleRelease \
+            -PhiveloopUrl="$HIVELOOP_URL" \
+            -PhiveloopVersionCode=${{ github.run_number }} \
+            -PhiveloopVersionName="1.${{ github.run_number }}"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/hiveloop.apk"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          echo "apksigner: $BT"
+          "$BT/apksigner" verify --verbose --print-certs "$RUNNER_TEMP/hiveloop.apk" 2>&1 | head -12
+          test "${PIPESTATUS[0]}" -eq 0
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HIVELOOP_URL: ${{ github.event.inputs.url || vars.HIVELOOP_URL || 'https://hiveloop.example.org/' }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest "$RUNNER_TEMP/hiveloop.apk" \
+            --title "Hiveloop Android 1.${{ github.run_number }}" \
+            --notes "Hiveloop Android app (build ${{ github.run_number }}) for ${{ env.HIVELOOP_URL }}." \
+            --latest=false
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hiveloop-android
+          path: ${{ runner.temp }}/hiveloop.apk

@@ -1,0 +1,14 @@
+/data/
+/hiveloop
+/hiveloop-*
+*.db
+*.db-*
+
+# Android
+/android/.gradle/
+/android/build/
+/android/app/build/
+/android/local.properties
+*.p12
+*.jks
+*.keystore

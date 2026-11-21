@@ -1,0 +1,21 @@
+# systemd unit example: copy to /etc/systemd/system/hiveloop.service, adjust paths, then
+#   sudo systemctl daemon-reload && sudo systemctl enable --now hiveloop
+[Unit]
+Description=Hiveloop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=hiveloop
+WorkingDirectory=/opt/hiveloop
+EnvironmentFile=/opt/hiveloop/.env
+ExecStart=/opt/hiveloop/hiveloop
+Restart=on-failure
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/hiveloop/data
+
+[Install]
+WantedBy=multi-user.target
