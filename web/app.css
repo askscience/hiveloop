@@ -251,7 +251,7 @@ textarea.input { resize: vertical; min-height: 120px; line-height: 1.5; }
 .agenda .item .bar { align-self: stretch; border-radius: 4px; background: var(--c); }
 .agenda .item .t { font-weight: 500; font-size: 15px; }
 .agenda .item .s { color: var(--muted); font-size: 12.5px; display: flex; gap: 12px; flex-wrap: wrap; margin-top: 2px; }
-.agenda .item .s span { display: inline-flex; align-items: center; gap: 4px; }
+.agenda .item .s > span { display: inline-flex; align-items: center; gap: 4px; }
 .agenda .item .s .ic { width: 13px; height: 13px; }
 
 /* event detail */
@@ -515,7 +515,6 @@ textarea.input { resize: vertical; min-height: 120px; line-height: 1.5; }
 }
 :root[data-theme="dark"] .cm.mine .mdoc { border-color: rgba(0,0,0,.2); background: rgba(0,0,0,.06); }
 .mdoc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
-.avatar.sm { width: 26px; height: 26px; font-size: 10px; }
 .avatar.sm .ic { width: 14px; height: 14px; }
 .composer { position: relative; }
 .composer .att { background: transparent !important; color: var(--muted) !important; border-color: transparent !important; width: 32px; height: 32px; margin-left: -8px; }
@@ -1291,10 +1290,14 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 }
 
 /* ───────── avatar sizes: same size with or without a cartoon (initials scale too) ───────── */
+/* avatar sizes, the same everywhere: add xs / sm / md / xl next to "avatar" */
+.avatar.xs, .avatar.xs[data-uid] { width: 20px; height: 20px; font-size: 8px; }
+.avatar.sm, .avatar.sm[data-uid] { width: 26px; height: 26px; font-size: 10px; }
+.avatar.md, .avatar.md[data-uid] { width: 36px; height: 36px; font-size: 13px; }
 .avatar[data-uid] { width: 60px; height: 60px; font-size: 21px; }          /* lists: members, users, group page */
 .prow .avatar[data-uid] { width: 52px; height: 52px; font-size: 18px; }   /* attendance */
 .mention-pop .avatar[data-uid] { width: 42px; height: 42px; font-size: 15px; }
-.me .avatar[data-uid] { width: 46px; height: 46px; font-size: 16px; }
+.nav .me .avatar[data-uid] { width: 46px; height: 46px; font-size: 16px; }   /* menu: me */
 .cm > .avatar, .cm.bot > .avatar.aiav { width: 46px; height: 46px; font-size: 16px; }   /* chat: smaller */
 .cm.bot > .avatar.aiav .ic { width: 22px; height: 22px; }
 .cm > .avatar:empty { visibility: hidden; }
@@ -1492,7 +1495,6 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .okc .ic { width: 13px; height: 13px; }
 
 .ev-author { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 0 0 14px; border-radius: 12px; background: var(--bg-2); }
-.ev-author .avatar { width: 36px; height: 36px; }
 .ev-author .who { flex: 1; min-width: 0; display: grid; line-height: 1.25; }
 .ev-author .who small { color: var(--muted); font-size: 11.5px; }
 .ev-author .who b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1511,7 +1513,6 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .shift .sh-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; font-size: 13px; }
 .shift .sp { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 2px; border-radius: 999px; background: var(--bg-2); }
 .shift .sp.me { font-weight: 600; }
-.shift .sp .avatar.xs { width: 20px; height: 20px; font-size: 8.5px; }
 .shift .sp .ibtn { margin-right: -4px; }
 
 .privbox { margin: -4px 0 14px; }
@@ -1540,7 +1541,8 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .cm-sys.vol small { color: var(--ink-2); font-size: 12.5px; line-height: 1.35; }
 .cm-sys.vol .ic { color: var(--danger); width: 18px; height: 18px; }
 .side-sub { font: 600 11px/1 var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 14px 10px 6px; }
-.conv.room.dm .avatar { width: 30px; height: 30px; }
+.rdot.person { background: none; }
+.rdot > .avatar[data-uid] { width: 100%; height: 100%; font-size: inherit; }
 .conv.newdm { width: 100%; border: 1px dashed var(--line); background: none; font: inherit; text-align: left; margin-top: 6px; }
 .conv.newdm .rdot { --c: var(--ink-2); }
 .chatv.is-dm .ai-count { display: none; }
@@ -1554,4 +1556,3 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .notifcard .grow { flex: 1; }
 .dmpick { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; color: inherit; font: inherit; }
 .agenda .item .s .by { display: inline-flex; align-items: center; gap: 5px; }
-.agenda .item .s .by .avatar.xs { width: 18px; height: 18px; font-size: 7.5px; }

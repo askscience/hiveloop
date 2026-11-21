@@ -85,6 +85,9 @@ setInterval(async () => {
 }, 60000);
 
 const initials = (u) => (u?.name || u?.username || "?").split(/\s+/).map((x) => x[0]).slice(0, 2).join("");
+// avatar: the only way to show a person — their cartoon avatar if they made one, else initials.
+// size: "" (follows the place it is in), "xs", "sm", "md", "xl".
+const avatar = (id, who, size = "") => `<span class="avatar${size ? " " + size : ""}" data-uid="${id}">${esc(initials(who))}</span>`;
 const fmtSize = (n) => (n < 1024 ? n + " B" : n < 1048576 ? (n / 1024).toFixed(0) + " KB" : (n / 1048576).toFixed(1) + " MB");
 const pad = (n) => String(n).padStart(2, "0");
 const localInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -322,7 +325,7 @@ function renderShell() {
       ${items.map((n, i) => `<a class="item ${n[4] || ""} ${MAIN_M.includes(n[0]) ? "" : "sec-m"}" href="#/${n[0]}" data-r="${n[0]}" aria-label="${t(n[2])}">${icon(n[1])}<span class="lb">${t(n[2])}</span><span class="n">0${i + 1}</span><b class="nb" data-nb="${n[0]}"></b></a>`).join("")}
       <a class="item more-m" href="#" data-more aria-label="${t("more_menu")}">${icon("menu")}<span class="lb">${t("more_menu")}</span><b class="nb" data-nb="more"></b></a>
       <div class="spacer"></div>
-      <div class="me"><div class="avatar" data-uid="${S.me.id}">${esc(initials(S.me))}</div><div class="who"><b>${esc(S.me.name || S.me.username)}</b><span>${t("role_" + S.me.role)}</span></div></div>
+      <div class="me">${avatar(S.me.id, S.me)}<div class="who"><b>${esc(S.me.name || S.me.username)}</b><span>${t("role_" + S.me.role)}</span></div></div>
     </nav>
     <main id="main"></main></div>`;
   $("[data-more]").onclick = (e) => { e.preventDefault(); openMoreMenu(); };
@@ -461,7 +464,7 @@ function dayBlock(day, evs, showEmpty = false) {
         <span>${icon("clock")}${e.all_day ? t("all_day") : `${fmtTime(e.s)} – ${fmtTime(e.e)}`}</span>
         ${e.location ? `<span>${icon("pin")}${isURL(e.location) ? t("map") : esc(e.location)}</span>` : ""}
         <span class="gtag" style="--c:${esc(evColor(e))}"><i></i>${esc(e.group_name || t("general"))}</span>
-        ${e.created_by && e.author ? `<span class="by"><span class="avatar xs" data-uid="${e.created_by}">${esc(initials({ name: e.author }))}</span>${t("by")} ${esc(e.author)}</span>` : ""}
+        ${e.created_by && e.author ? `<span class="by">${avatar(e.created_by, { name: e.author }, "xs")}${t("by")} ${esc(e.author)}</span>` : ""}
         ${e.participants?.length ? `<span>${icon("groups")}${e.participants.length}</span>` : ""}
         ${evMiss(e) ? `<span class="need">${icon("alert")}${t("vol_title")}: ${missText(evMiss(e))}</span>` : ""}
       </div>${e.my_signup ? `<div class="mybook">${icon("check")}${t("you_are_booked")}: ${esc(slotText(e.my_signup))}</div>` : ""}</span>${e.via_ai ? `<span class="badge acc">AI</span>` : "<span></span>"}</button>`).join("")
@@ -493,7 +496,7 @@ function showEvent(e, rerender) {
   const s = sheet({
     title: e.title,
     body: `<div class="ev-detail">
-    ${e.created_by ? `<div class="ev-author"><span class="avatar" data-uid="${e.created_by}">${esc(initials({ name: e.author }))}</span><span class="who"><small>${t("created_by")}</small><b>${esc(e.author || "—")}</b></span>
+    ${e.created_by ? `<div class="ev-author">${avatar(e.created_by, { name: e.author }, "md")}<span class="who"><small>${t("created_by")}</small><b>${esc(e.author || "—")}</b></span>
       ${e.created_by !== S.me.id && e.author_username ? `<button class="btn sm" data-dm>${icon("chat")}${t("write_to")}</button>` : ""}</div>` : ""}
     <div class="meta">
       <div>${icon("clock")}<span>${esc(when)}</span></div>
@@ -505,7 +508,7 @@ function showEvent(e, rerender) {
     ${shiftsHTML(e)}
     <div class="parts"><div class="parts-h"><b>${t("participants")}</b><span class="mono muted">${e.participants?.length || 0}</span><span style="flex:1"></span>
       ${e.my_signup ? `<button class="btn sm" data-book>${icon("edit")}${t("change_booking")}</button><button class="btn sm ghost danger" data-unbook>${icon("x")}</button>` : `<button class="btn sm primary" data-book>${icon("check")}${t("book")}</button>`}</div>
-      ${e.participants?.length ? `<div class="plist">${e.participants.map((p) => `<div class="prow ${p.user_id === S.me.id ? "me" : ""}"><span class="avatar sm" data-uid="${p.user_id}">${esc(initials(p))}</span><span class="pn">${esc(p.name)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</span><span class="mono pt">${esc(slotText(p, e))}</span>${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn sm ghost danger" data-rmp="${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</div>`).join("")}</div>` : `<p class="muted" style="margin:6px 0 0">${t("nobody_yet")}</p>`}
+      ${e.participants?.length ? `<div class="plist">${e.participants.map((p) => `<div class="prow ${p.user_id === S.me.id ? "me" : ""}">${avatar(p.user_id, p)}<span class="pn">${esc(p.name)}${p.note ? `<small>${esc(p.note)}</small>` : ""}</span><span class="mono pt">${esc(slotText(p, e))}</span>${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn sm ghost danger" data-rmp="${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</div>`).join("")}</div>` : `<p class="muted" style="margin:6px 0 0">${t("nobody_yet")}</p>`}
     </div>
     ${e.description ? `<div class="md">${md(e.description)}</div>` : ""}</div>`,
     foot: e.can_edit ? `<button class="btn danger left" data-del>${icon("trash")}${t("delete")}</button>${e.private ? "" : `<button class="btn" data-pub>${icon("share")}${t("share")}</button>`}<button class="btn primary" data-edit>${icon("edit")}${t("edit")}</button>` : "",
@@ -540,7 +543,7 @@ function shiftsHTML(e) {
       return `<div class="shift ${full ? "full" : ""}"><div class="sh-top"><span class="sh-time">${esc(shiftTime(sh, e))}</span>${sh.label ? `<span class="sh-label">${esc(sh.label)}</span>` : ""}<span class="grow"></span>
         <span class="sh-count ${full ? "ok" : "bad"}">${have}/${sh.needed}</span>
         ${past ? "" : sh.mine ? `<button class="btn sm ghost" data-sleave="${sh.id}">${t("vol_leave")}</button>` : `<button class="btn sm ${full ? "" : "primary"}" data-sjoin="${sh.id}">${icon("check")}${t("vol_join")}</button>`}</div>
-        <div class="sh-people">${sh.people.map((p) => `<span class="sp ${p.user_id === S.me.id ? "me" : ""}"><span class="avatar xs" data-uid="${p.user_id}">${esc(initials(p))}</span>${esc(p.name)}${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn xs ghost danger" data-srm="${sh.id}:${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</span>`).join("") || `<span class="muted">${t("vol_none")}</span>`}</div></div>`;
+        <div class="sh-people">${sh.people.map((p) => `<span class="sp ${p.user_id === S.me.id ? "me" : ""}">${avatar(p.user_id, p, "xs")}${esc(p.name)}${e.can_edit && p.user_id !== S.me.id ? `<button class="ibtn xs ghost danger" data-srm="${sh.id}:${p.user_id}" title="${t("delete")}">${icon("x")}</button>` : ""}</span>`).join("") || `<span class="muted">${t("vol_none")}</span>`}</div></div>`;
     }).join("")}</div>`;
 }
 
@@ -850,7 +853,7 @@ async function groupPage(g, rerender) {
           : `<p class="muted">${t("no_upcoming")}</p>`}
       </section>
       <section class="gsec"><h4>${t("members_title")}${inside ? ` <span class="muted">· ${members.length}</span>` : ""}${manage ? `<button class="btn sm ghost" data-mem>${icon("groups")}${t("manage_members")}</button>` : ""}</h4>
-        ${inside ? `<div class="gmembers">${members.map((u) => `<div class="gm"><span class="avatar" data-uid="${u.id}">${esc(initials(u))}</span><span>${esc(u.name || u.username)}${u.id === S.me.id ? ` <small class="muted">(${t("you")})</small>` : ""}${u.id === g.leader_id ? ` ${icon("crown")}` : ""}</span></div>`).join("") || `<p class="muted">—</p>`}</div>`
+        ${inside ? `<div class="gmembers">${members.map((u) => `<div class="gm">${avatar(u.id, u)}<span>${esc(u.name || u.username)}${u.id === S.me.id ? ` <small class="muted">(${t("you")})</small>` : ""}${u.id === g.leader_id ? ` ${icon("crown")}` : ""}</span></div>`).join("") || `<p class="muted">—</p>`}</div>`
           : `<p class="muted">${t("join_to_see_members")}</p>`}
       </section>
       <section class="gsec"><h4>${t("room_docs")}${inside ? ` <span class="muted">· ${allDocs.length}</span>` : ""}</h4>
@@ -997,7 +1000,7 @@ async function membersSheet(g, rerender) {
       <div class="leader-box">${icon("crown")}<div class="grow">${g.leader_id ? `<b>${t("leader")}: ${esc(g.leader_id === S.me.id ? t("you_obj") : g.leader_name)}</b>` : `<b>${t("no_leader")}</b><small class="muted">${t("vote_hint")}</small>`}</div>
         ${g.is_leader ? `<button class="btn sm" data-resign>${t("step_down")}</button>` : isAdmin() && g.leader_id ? `<button class="btn sm danger" data-unlead>${t("remove_leader")}</button>` : ""}</div>
       ${manage && others.length ? `<div class="field"><span>${t("add_member")}</span><div style="display:flex;gap:8px"><select class="input" data-u>${others.map((u) => `<option value="${u.id}">${esc(u.name || u.username)} (@${esc(u.username)})</option>`).join("")}</select><button class="btn primary" data-add>${icon("plus")}${t("add")}</button></div></div>` : ""}
-      <div class="list">${members.map((u) => `<div class="li"><div class="avatar" data-uid="${u.id}">${esc(initials(u))}</div><div class="grow"><div class="t">${esc(u.name || u.username)}${u.id === g.leader_id ? ` <span class="badge acc lead-badge">${icon("crown")}${t("leader")}</span>` : ""}</div><div class="s mono">@${esc(u.username)}</div></div>
+      <div class="list">${members.map((u) => `<div class="li">${avatar(u.id, u)}<div class="grow"><div class="t">${esc(u.name || u.username)}${u.id === g.leader_id ? ` <span class="badge acc lead-badge">${icon("crown")}${t("leader")}</span>` : ""}</div><div class="s mono">@${esc(u.username)}</div></div>
         <div class="acts">${isAdmin() && u.id !== g.leader_id ? `<button class="btn sm ghost act" data-lead="${u.id}">${icon("crown")}<span class="lbl">${t("make_leader")}</span></button>` : ""}${manage && u.id !== S.me.id ? `<button class="btn sm ghost act danger" data-rm="${u.id}">${icon("x")}<span class="lbl">${t("remove")}</span></button>` : ""}</div></div>`).join("") || `<div class="empty">—</div>`}</div>`;
     $("[data-add]", body)?.addEventListener("click", async () => { try { await api("POST", `/api/groups/${g.id}/members`, { user_id: +$("[data-u]", body).value }); render(); } catch (e) { fail(e); } });
     $$("[data-rm]", body).forEach((b) => (b.onclick = async () => {
@@ -1026,7 +1029,7 @@ async function voteSheet(g) {
     }
     body.innerHTML = `<p class="muted" style="margin-top:0">${t("vote_explain").replace("{n}", st.needed).replace("{m}", st.members)}</p>
       <div class="list">${st.candidates.map((c) => `<button class="li vote-row ${st.my_vote === c.id ? "on" : ""}" data-c="${c.id}">
-        <div class="avatar" data-uid="${c.id}">${esc(initials(c))}</div><div class="grow"><div class="t">${esc(c.name)}${c.id === S.me.id ? ` <span class="muted">(${t("you")})</span>` : ""}</div>
+        ${avatar(c.id, c)}<div class="grow"><div class="t">${esc(c.name)}${c.id === S.me.id ? ` <span class="muted">(${t("you")})</span>` : ""}</div>
         <div class="vote-bar"><i style="width:${Math.min(100, (c.votes / st.needed) * 100)}%"></i></div></div>
         <span class="mono vote-n">${c.votes}/${st.needed}</span>${st.my_vote === c.id ? `<span class="badge acc">${icon("check")}${t("your_vote")}</span>` : ""}</button>`).join("")}</div>`;
     $$("[data-c]", body).forEach((b) => (b.onclick = async () => {
@@ -1274,7 +1277,7 @@ async function dmPicker() {
   const s = sheet({ title: t("dm_pick"), body });
   const draw = (q = "") => {
     const list = people.filter((u) => !q || (u.name || "").toLowerCase().includes(q) || u.username.toLowerCase().includes(q));
-    $("[data-list]", body).innerHTML = list.map((u) => `<button class="li dmpick" data-u="${u.id}"><span class="avatar" data-uid="${u.id}">${esc(initials(u))}</span><div class="grow"><div class="t">${esc(u.name || u.username)}</div><div class="s mono">@${esc(u.username)}</div></div>${icon("chat")}</button>`).join("") || `<div class="empty">—</div>`;
+    $("[data-list]", body).innerHTML = list.map((u) => `<button class="li dmpick" data-u="${u.id}">${avatar(u.id, u)}<div class="grow"><div class="t">${esc(u.name || u.username)}</div><div class="s mono">@${esc(u.username)}</div></div>${icon("chat")}</button>`).join("") || `<div class="empty">—</div>`;
     fillAvatars(body);
     $$("[data-u]", body).forEach((b) => (b.onclick = () => { s.close(); openDM(+b.dataset.u); }));
   };
@@ -1311,7 +1314,7 @@ async function viewChat(v, args) {
   const renderRooms = () => {
     const firstDM = chat.rooms.find((r) => r.dm)?.id;
     roomsEl.innerHTML = chat.rooms.map((r) => r.dm ? `${r.id === firstDM ? `<div class="side-sub">${t("dm_title")}</div>` : ""}<div class="conv room dm ${r.id === chat.room && !wrap.classList.contains("show-side") ? "on" : ""}" data-r="${r.id}">
-      <span class="avatar" data-uid="${r.dm.id}">${esc(initials(r.dm))}</span>
+      <span class="rdot person">${avatar(r.dm.id, r.dm)}</span>
       <span class="t"><b>${esc(r.name)}</b><small>${r.last_text ? `${r.last_by === (S.me.name || S.me.username) ? t("you_cap") + ": " : ""}${esc(r.last_text)}` : "—"}</small></span>
       ${r.mentions || (r.unread && r.id !== chat.room) ? `<span class="nb on">${r.unread || r.mentions}</span>` : ""}</div>` : `<div class="conv room ${r.id === chat.room && !wrap.classList.contains("show-side") ? "on" : ""}" data-r="${r.id}">
       <span class="rdot ${(r.id === 0 ? generalImg() : groupImg(groupById(r.id))) ? "pic" : ""}" style="--c:${esc(r.id === 0 ? generalColor() : r.color)}">${r.id === 0 ? (generalImg() ? `<img alt="" loading="lazy" src="${generalImg()}">` : icon("globe")) : groupById(r.id)?.image_v ? `<img alt="" loading="lazy" src="${groupImg(groupById(r.id))}">` : esc(r.name[0] || "#")}</span>
@@ -1360,7 +1363,7 @@ async function viewChat(v, args) {
       return frag;
     }
     const el = h(`<div class="cm ${mine ? "mine" : ""} ${grouped ? "grp" : ""} ${m.mentions.includes(S.me.id) ? "hit" : ""}" data-id="${m.id}">
-      ${grouped ? `<div class="avatar sm"></div>` : `<div class="avatar sm" data-uid="${m.user_id}">${esc(initials({ name: m.author }))}</div>`}
+      ${grouped ? `<div class="avatar sm"></div>` : `${avatar(m.user_id, { name: m.author })}`}
       <div class="cb">${grouped || mine ? "" : `<div class="who"><b>${esc(m.author)}</b><span class="mono">@${esc(m.username)}</span></div>`}
         <div class="bubble">${quoteHTML(m.reply)}${m.content ? `<div class="txt">${fmtMsg(m.content, members)}</div>` : ""}
           ${m.doc ? `<button class="mdoc" data-doc="${m.doc.id}">${icon(fileIcon({ mime: m.doc.mime, name: m.doc.name }))}<span>${esc(m.doc.name)}</span></button>` : ""}
@@ -1528,7 +1531,7 @@ async function viewChat(v, args) {
     matches = all.filter((m) => m.username.toLowerCase().startsWith(q) || (m.name || "").toLowerCase().split(/\s+/).some((p) => p.startsWith(q))).slice(0, 6);
     if (!matches.length) return hidePop();
     sel = Math.min(sel, matches.length - 1);
-    pop.innerHTML = matches.map((m, i) => `<button type="button" class="${i === sel ? "on" : ""}" data-i="${i}">${m.id > 0 ? `<span class="avatar sm" data-uid="${m.id}">${esc(initials(m))}</span>` : m.id < 0 ? `<span class="avatar sm aiav" data-uid="ai">${icon("ai")}</span>` : `<span class="avatar sm">${icon("at")}</span>`}<b>${esc(m.name || m.username)}</b><span class="mono muted">@${esc(m.username)}</span></button>`).join("");
+    pop.innerHTML = matches.map((m, i) => `<button type="button" class="${i === sel ? "on" : ""}" data-i="${i}">${m.id > 0 ? `${avatar(m.id, m)}` : m.id < 0 ? `<span class="avatar sm aiav" data-uid="ai">${icon("ai")}</span>` : `<span class="avatar sm">${icon("at")}</span>`}<b>${esc(m.name || m.username)}</b><span class="mono muted">@${esc(m.username)}</span></button>`).join("");
     pop.classList.remove("hidden");
     $$("[data-i]", pop).forEach((b) => (b.onmousedown = (e) => { e.preventDefault(); pick(+b.dataset.i); }));
   };
@@ -1828,7 +1831,7 @@ async function viewAdmin(v) {
         <button class="btn sm primary" data-ok-u="${u.id}">${icon("check")}${t("approve")}</button><button class="ibtn sm ghost danger" data-no-u="${u.id}" title="${t("reject")}">${icon("x")}</button></div>`).join("")}</div>
       <div class="section-t"><h2>${t("users")}</h2></div>` : ""}
     <div class="list utable">${S.users.map((u, i) => `<div class="li rv" style="--i:${Math.min(i, 12)}">
-      <div class="avatar" data-uid="${u.id}">${esc(initials(u))}</div>
+      ${avatar(u.id, u)}
       <div class="grow"><div class="t">${esc(u.name || u.username)} ${u.id === S.me.id ? `<span class="muted">(${t("you")})</span>` : ""}</div><div class="s mono">@${esc(u.username)}${u.usage ? ` · ${usageText(u.usage)}` : ""}</div></div>
       <span class="badge ${u.role !== "user" ? "acc" : ""}">${t("role_" + u.role)}</span>
       <div class="acts">${can(u) && u.id !== S.me.id ? `<button class="btn sm ghost act" data-ed="${u.id}" title="${t("edit")}">${icon("edit")}<span class="lbl">${t("edit")}</span></button><button class="btn sm ghost act danger" data-del="${u.id}" title="${t("delete")}">${icon("trash")}<span class="lbl">${t("delete")}</span></button>` : ""}</div>
@@ -2100,7 +2103,7 @@ async function viewSettings(v) {
       </form>
       <div class="card rv avcard" style="padding:20px;--i:1">
         <div class="field" style="margin:0"><span>${t("avatar")}</span></div>
-        <div class="avrow"><div class="avatar xl" data-uid="${S.me.id}">${esc(initials(S.me))}</div>
+        <div class="avrow">${avatar(S.me.id, S.me, "xl")}
           <div class="avbtns"><button type="button" class="btn primary" data-avedit>${icon("edit")}${t(S.avatar ? "avatar_edit" : "avatar_create")}</button>
           ${S.avatar ? `<button type="button" class="btn ghost danger" data-avdel>${icon("x")}${t("avatar_remove")}</button>` : ""}</div></div>
         <p class="muted" style="margin:0;font-size:13.5px">${t("avatar_hint")}</p>
