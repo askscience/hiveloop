@@ -1421,7 +1421,7 @@ async function viewChat(v, args) {
     if (dm && !list.length) msgsEl.innerHTML = `<div class="empty"><span class="serif">${esc(roomName(r))}</span>${t("dm_hint")}</div>`;
     msgsEl.scrollTop = msgsEl.scrollHeight;
     markRead();
-    if (chat.prefill) { input.value = chat.prefill; chat.prefill = ""; input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+    if (chat.prefill) { input.value = chat.prefill; chat.prefill = ""; input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
     else if (!phone()) input.focus({ preventScroll: true });
   }
   async function resync() {
