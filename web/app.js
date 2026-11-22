@@ -832,8 +832,8 @@ async function groupPage(g, rerender) {
     const cover = !!g.image_v;
     const head = `
       <div class="ghead" style="--c:${esc(g.color)}">
-        <div class="gname">${esc(g.name)}</div>
-        <div class="gmeta"><span><i class="sw"></i>${g.members} ${g.members === 1 ? t("member") : t("members")}</span>
+        <div class="gname"><i class="sw"></i>${esc(g.name)}</div>
+        <div class="gmeta"><span>${g.members} ${g.members === 1 ? t("member") : t("members")}</span>
           <span>${icon("crown")}${g.leader_id ? `${t("leader")}: <b>${esc(g.leader_id === S.me.id ? t("you_obj") : g.leader_name)}</b>` : `<span class="muted">${t("no_leader")}</span>`}</span>
           ${g.private ? `<span class="badge">${icon("lock")}${t("group_private_short")}</span>` : ""}
           ${member ? `<span class="badge acc">${icon("check")}${t("joined")}</span>` : ""}</div>
