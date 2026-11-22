@@ -280,15 +280,6 @@ textarea.input { resize: vertical; min-height: 120px; line-height: 1.5; }
 .md hr { border: 0; border-top: 1px solid var(--line); margin: 1.2em 0; }
 
 /* ───────── groups ───────── */
-.gcard { padding: 15px; display: flex; flex-direction: column; gap: 10px; position: relative; overflow: hidden; min-height: 140px; transition: transform .25s var(--ease), box-shadow .25s; }
-.gcard:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-.gcard > * { position: relative; z-index: 1; }
-.gcard::before { content: ""; pointer-events: none; position: absolute; right: -40px; top: -40px; width: 120px; height: 120px; border-radius: 50%; background: var(--c); opacity: .14; transition: transform .5s var(--ease); }
-.gcard:hover::before { transform: scale(1.3); }
-.gcard h3 { margin: 0; font: 400 26px/1 var(--serif); letter-spacing: -.02em; }
-.gcard p { margin: 0; color: var(--muted); font-size: 13px; flex: 1; }
-.gcard .foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.gcard .sw { width: 10px; height: 10px; border-radius: 50%; background: var(--c); display: inline-block; margin-right: 8px; }
 
 /* ───────── documents ───────── */
 .drop {
@@ -747,19 +738,6 @@ main { padding: 20px clamp(16px, 3vw, 36px) 40px; }
 .section-t h2 em { display: none; }
 
 /* groups: plain cards, no decorative circle */
-.gcard { min-height: 0; padding: 16px; gap: 8px; }
-.gcard::before { display: none; }
-.gcard:hover { transform: none; }
-.gcard h3 { font: italic 400 28px/1.1 var(--logo); letter-spacing: -.01em; }
-.gcard p { font-size: 14px; }
-.gcard .sw { width: 10px; height: 10px; }
-.gcard .foot { flex-wrap: wrap; order: 3; }
-.gcard h3 { order: -1; }
-.gcard > div:first-child { order: 1; flex-wrap: wrap; gap: 4px 10px; }
-.gcard > div:first-child > .mono { white-space: nowrap; }
-.gcard .lockt .ic { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; color: var(--muted); }
-.gcard p { order: 2; }
-.gcard p:empty { display: none; }
 
 /* calendar: clear numbers, no stripes */
 .cal .dow { font: 500 13px/1 var(--sans); letter-spacing: 0; text-transform: none; padding: 10px; }
@@ -1235,8 +1213,6 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .mention .avatar.xs:not(.has-av) { display: none; }
 
 /* group overview (full page) */
-.gcard[data-open] { cursor: pointer; }
-.gcard[data-open]:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
 .gpage { display: grid; gap: 22px; max-width: 860px; margin: 0 auto; width: 100%; }
 .ghead { border-left: 4px solid var(--c); padding: 4px 0 4px 16px; display: grid; gap: 10px; }
 .gname { font: italic 400 34px/1.1 var(--logo, var(--serif)); }
@@ -1266,15 +1242,12 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .gev .badge .ic { width: 14px; height: 14px; }
 
 /* group cover image */
-.gcard .gcover { margin: -16px -16px 4px; height: 120px; background: var(--bg-2); }
-.gcard .gcover img, .gpcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gpcover img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gimg-edit { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .gimg-prev { width: 120px; height: 72px; border-radius: 10px; overflow: hidden; background: var(--bg-2); display: grid; place-items: center; color: var(--muted); flex: none; }
 .gimg-prev img { width: 100%; height: 100%; object-fit: cover; }
 .gimg-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .gimg-btns label.btn { cursor: pointer; }
-.gcard > div.gcover:first-child { order: -2; }
-.gcard > .gcover + div { order: 1; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .gm .ic { display: inline-block; }
 
 /* the menu (sidebar on computers, bar at the bottom on phones) follows the button style too */
@@ -1408,7 +1381,6 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .ghero-info.on-page { color: var(--ink); }
 .ghero-info.on-page .gname, .ghero-info.on-page .ghero-desc { text-shadow: none; }
 .ghero-info.on-page .ghero-desc { color: var(--ink-2); }
-.gcard .gcover { border-bottom: 4px solid var(--c); }
 .rdot.pic { padding: 0; overflow: hidden; background: var(--bg-2); }
 .rdot.pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .rsw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--c); margin-right: 8px; vertical-align: 1px; }
@@ -1557,3 +1529,36 @@ table.csv th { position: sticky; top: 0; background: var(--bg-2); font-weight: 6
 .notifcard .grow { flex: 1; }
 .dmpick { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--line); text-align: left; cursor: pointer; color: inherit; font: inherit; }
 .agenda .item .s .by { display: inline-flex; align-items: center; gap: 5px; }
+
+/* group cards: colour bar at the bottom; with a cover photo the photo fills the whole card,
+   darkened towards the bottom, with name, description and buttons on top (like the group page) */
+.gcard { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 8px; padding: 16px 16px 21px; transition: box-shadow .25s; }
+.gcard:hover { box-shadow: var(--shadow); }
+.gcard::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--c); z-index: 2; pointer-events: none; }
+.gcard > * { position: relative; z-index: 1; }
+.gcard[data-open] { cursor: pointer; }
+.gcard[data-open]:focus-visible { outline: 2px solid var(--pri); outline-offset: 2px; }
+.gcard h3 { order: -1; display: flex; align-items: center; gap: 10px; margin: 0; font: italic 400 28px/1.1 var(--logo); letter-spacing: -.01em; }
+.gcard > div:first-child:not(.gcover), .gcard > .gcover + div { order: 1; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.gcard > div:first-child > .mono { white-space: nowrap; }
+.gcard p { order: 2; flex: 1; margin: 0; color: var(--muted); font-size: 14px; }
+.gcard p:empty { display: none; }
+.gcard .foot { order: 3; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.gcard h3 .sw { width: 16px; height: 16px; border-radius: 50%; background: var(--c); display: inline-block; flex: none; }
+.gcard .lockt .ic { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; color: var(--muted); }
+
+.gcard.has-img { min-height: 290px; justify-content: flex-end; color: #fff; border-color: transparent; background: #111; isolation: isolate; }
+.gcard.has-img > .gcover { position: absolute; inset: 0; z-index: 0; background: #111; }
+.gcard.has-img > .gcover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .6s var(--ease); }
+.gcard.has-img:hover > .gcover img { transform: scale(1.04); }
+.gcard.has-img > .gcover::after { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to bottom, rgba(0,0,0,.28) 0%, rgba(0,0,0,0) 24%, rgba(0,0,0,.15) 42%, rgba(0,0,0,.62) 68%, rgba(0,0,0,.86) 100%); }
+.gcard.has-img h3 { order: 0; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.5); }
+.gcard.has-img p { flex: none; }
+.gcard.has-img p, .gcard.has-img .mono, .gcard.has-img .muted, .gcard.has-img .leader-line, .gcard.has-img .lockt .ic { color: rgba(255,255,255,.9); text-shadow: 0 1px 6px rgba(0,0,0,.5); }
+.gcard.has-img .sw { box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.gcard.has-img .btn { background: rgba(255,255,255,.16); color: #fff; border-color: rgba(255,255,255,.35); backdrop-filter: blur(12px) saturate(1.3); -webkit-backdrop-filter: blur(12px) saturate(1.3); }
+.gcard.has-img .btn.ghost { background: transparent; border-color: transparent; }
+.gcard.has-img .btn.ghost:hover { background: rgba(255,255,255,.16); }
+.gcard.has-img .btn.primary { background: #fff; color: #111; border-color: #fff; }
+.gcard.has-img .badge { background: rgba(255,255,255,.2); color: #fff; border-color: transparent; }

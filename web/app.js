@@ -748,10 +748,10 @@ async function viewGroups(v) {
       (S.groups.length ? `<div class="grid-cards">${S.groups.map((g, i) => `
         <div class="card gcard rv ${g.image_v ? "has-img" : ""}" style="--i:${i};--c:${esc(g.color)}" data-open="${g.id}" tabindex="0" role="button" aria-label="${esc(g.name)}">
           ${g.image_v ? `<div class="gcover"><img alt="" loading="lazy" src="${groupImg(g)}"></div>` : ""}
-          <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono muted"><span class="sw"></span>${g.members} ${g.members === 1 ? t("member") : t("members")}${g.private ? ` · <span class="lockt" title="${t("group_private_short")}">${icon("lock")}</span>` : ""}</span>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono muted">${g.members} ${g.members === 1 ? t("member") : t("members")}${g.private ? ` · <span class="lockt" title="${t("group_private_short")}">${icon("lock")}</span>` : ""}</span>
           ${isAdmin() || g.is_leader ? `<span style="display:flex;gap:2px"><button class="btn sm ghost act" data-mem="${g.id}" title="${t("manage_members")}">${icon("groups")}<span class="lbl">${t("manage_members")}</span></button><button class="btn sm ghost act" data-edit="${g.id}" title="${t("edit")}">${icon("edit")}<span class="lbl">${t("edit")}</span></button></span>` : ""}</div>
           <div class="leader-line">${icon("crown")}${g.leader_id ? `<span>${t("leader")}: <b>${esc(g.leader_id === S.me.id ? t("you_obj") : g.leader_name)}</b></span>` : `<span class="muted">${t("no_leader")}</span>`}</div>
-          <h3>${esc(g.name)}</h3><p>${esc(g.description)}</p>
+          <h3><span class="sw"></span>${esc(g.name)}</h3><p>${esc(g.description)}</p>
           <div class="foot">
             <span style="display:flex;gap:2px"><a class="btn sm ghost act" href="#/calendar" data-cal="${g.id}" title="${t("nav_calendar")}">${icon("calendar")}<span class="lbl">${t("nav_calendar")}</span></a>${g.is_member || isAdmin() ? `<a class="btn sm ghost act" href="#/chat/${g.id}" title="${t("nav_chat")}">${icon("chat")}<span class="lbl">${t("nav_chat")}</span></a>` : ""}</span>
             ${g.is_member ? `<button class="btn sm" data-leave="${g.id}">${icon("check")}${t("joined")}</button>` : g.private ? `<span class="badge">${icon("lock")}${t("invite_only")}</span>` : `<button class="btn sm primary" data-join="${g.id}">${icon("plus")}${t("join")}</button>`}
