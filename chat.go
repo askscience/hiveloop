@@ -130,7 +130,7 @@ var aiTools = []oTool{
 		"description": p("string", "Detailed program in Markdown (schedule, agenda, notes)"),
 		"location":    p("string", "Place (optional): precise name and town, e.g. \"Town Hall, Main Street 1, Springfield\", or a Google Maps link. It becomes a map link."),
 		"group_id":    p("integer", "Group id the event belongs to. Omit for a general event (admins only)."),
-		"private":     p("boolean", "true = internal organisational event, visible only to the group's members (needs group_id)"),
+		"private":     p("boolean", "true = internal organisational event, visible only to the group's members (needs group_id). Omitted: false, except in private groups where it defaults to true"),
 		"shifts":      shiftsParam,
 	}, "title", "start"),
 	tool("update_event", "Modify an existing event. Only pass fields to change.", map[string]any{
@@ -255,7 +255,7 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 
 	switch name {
 	case "list_groups":
-		gs, err := a.listGroups(u.ID)
+		gs, err := a.listGroups(u)
 		if err != nil {
 			return fail(err)
 		}
@@ -263,10 +263,11 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 			ID       int64  `json:"id"`
 			Name     string `json:"name"`
 			IsMember bool   `json:"is_member"`
+			Private  bool   `json:"private,omitempty"`
 		}
 		list := []g{}
 		for _, x := range gs {
-			list = append(list, g{x.ID, x.Name, x.IsMember})
+			list = append(list, g{x.ID, x.Name, x.IsMember, x.Private})
 		}
 		return out(list, fmt.Sprintf("%d", len(list)))
 
@@ -630,7 +631,7 @@ func (a *App) runTool(u *User, room *int64, name string, raw json.RawMessage) (s
 
 func (a *App) systemPrompt(u *User) string {
 	now := time.Now().In(a.cfg.TZ)
-	gs, _ := a.listGroups(u.ID)
+	gs, _ := a.listGroups(u)
 	var mine []string
 	for _, g := range gs {
 		if g.IsMember {
@@ -659,7 +660,7 @@ User: %s (role %s). Groups of the user: %s.
 %s
 You can use tools to read/manage the shared calendar, read the user's documents and those shared with them, share the user's own documents with groups or everyone (only when asked), change existing Markdown documents the user can edit (update_document: read first, then replace or append), look at their previous versions (list_document_versions, read_document_version — the last 10 are kept; use them when asked what changed or to recover lost parts, and compare with the current text) and restore one only when explicitly asked, search the web (web_search, then read_webpage for details) and create Markdown (.md) files in their private space. You cannot create or change any other file type, and you cannot delete documents.
 Anyone can mark their attendance at any event with signup_event. In Italian this is called "presenza" ("segnare la presenza", "le mie presenze"): never call it "prenotazione". When the user wants to join / take part in / be present at an event, first identify the event (list_events), then ASK what time they will be there — the whole event or a time slot (from–to) — unless they already said it; never invent the time. list_events shows who will be present (participants) and the user's own attendance (my_signup).
-Private events: a group can keep internal organisational events (meetings, planning) visible only to its members (and admins): create_event/update_event with private=true and a group_id. They can never be shared outside the app. list_events marks them with "private": true; never mention a private event to someone who did not get it from list_events.
+Private events: a group can keep internal organisational events (meetings, planning) visible only to its members (and admins): create_event/update_event with private=true and a group_id. They can never be shared outside the app. Private groups (list_groups: "private": true) are invite only: nobody can join them by themselves, only an admin or the group leader adds people; their events are private by default, and become visible to everyone only if the user explicitly asks (private=false). list_events marks them with "private": true; never mention a private event to someone who did not get it from list_events.
 Volunteers: an event can need volunteers in shifts (e.g. Christmas stall 10:00–13:00, 2 volunteers): pass shifts to create_event/update_event. list_events shows each shift with needed, people and the event's "missing" count (volunteers still needed in shifts that have not started); to answer "where are volunteers missing?" look at events with missing > 0. signup_shift / cancel_shift sign up only the person who asked. The group is reminded automatically 3 days, 1 day and 3 hours before a shift that is still short. Every event shows who created it (author): people can write to them in a private message from the event.
 To share an event or a day's program with people OUTSIDE the app (e.g. "give me a link to send", "share Saturday's programme with people who want to join"), use share_event_link or share_day_link and give the user the exact url returned, as a Markdown link; mention that it can be turned off any time. Create these public links only when the user asks to share externally.
 When asked to plan something, create detailed events with a Markdown program in the description. Always check ids with list_groups / list_events before updating or deleting. Before deleting, make sure the user clearly asked for it. Dates must be YYYY-MM-DDTHH:MM in local time.

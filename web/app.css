@@ -757,6 +757,7 @@ main { padding: 20px clamp(16px, 3vw, 36px) 40px; }
 .gcard h3 { order: -1; }
 .gcard > div:first-child { order: 1; flex-wrap: wrap; gap: 4px 10px; }
 .gcard > div:first-child > .mono { white-space: nowrap; }
+.gcard .lockt .ic { display: inline-block; width: 13px; height: 13px; vertical-align: -2px; color: var(--muted); }
 .gcard p { order: 2; }
 .gcard p:empty { display: none; }
 

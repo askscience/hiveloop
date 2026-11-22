@@ -656,7 +656,7 @@ function eventForm(ev, day, rerender) {
       ${isAdmin() ? `<option value="">${t("general")}</option>` : ""}
       ${editable.map((g) => `<option value="${g.id}" ${g.id === defGroup ? "selected" : ""}>${esc(g.name)}</option>`).join("")}
     </select></label>
-    <div class="privbox ${defGroup ? "" : "hidden"}" data-privrow><label class="check"><input type="checkbox" name="private" ${ev?.private ? "checked" : ""}>${icon("lock")}${t("ev_private")}</label>
+    <div class="privbox ${defGroup ? "" : "hidden"}" data-privrow><label class="check"><input type="checkbox" name="private" ${(ev ? ev.private : groupById(defGroup)?.private) ? "checked" : ""}>${icon("lock")}${t("ev_private")}</label>
       <small class="hint">${t("ev_private_hint")}</small></div>
     <label class="field"><span>${t("location")} · ${t("optional")}</span><input class="input" name="location" maxlength="200" value="${esc(ev?.location)}"></label>
     <div class="field vol-ed"><span>${t("vol_title")} · ${t("optional")}</span>
@@ -678,7 +678,8 @@ function eventForm(ev, day, rerender) {
   }).catch(() => {});
   // private: only for a group's own events
   const gsel = $("[name=group]", form), privRow = $("[data-privrow]", form);
-  gsel.onchange = () => { privRow.classList.toggle("hidden", !gsel.value); if (!gsel.value) $("[name=private]", form).checked = false; };
+  // private groups: their events start private; sharing with everyone is a choice
+  gsel.onchange = () => { privRow.classList.toggle("hidden", !gsel.value); $("[name=private]", form).checked = !!groupById(+gsel.value)?.private; };
   // volunteer shifts
   const shiftsEl = $("[data-shifts]", form);
   const shiftRow = (sh) => {
@@ -747,13 +748,13 @@ async function viewGroups(v) {
       (S.groups.length ? `<div class="grid-cards">${S.groups.map((g, i) => `
         <div class="card gcard rv ${g.image_v ? "has-img" : ""}" style="--i:${i};--c:${esc(g.color)}" data-open="${g.id}" tabindex="0" role="button" aria-label="${esc(g.name)}">
           ${g.image_v ? `<div class="gcover"><img alt="" loading="lazy" src="${groupImg(g)}"></div>` : ""}
-          <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono muted"><span class="sw"></span>${g.members} ${g.members === 1 ? t("member") : t("members")}</span>
+          <div style="display:flex;justify-content:space-between;align-items:center"><span class="mono muted"><span class="sw"></span>${g.members} ${g.members === 1 ? t("member") : t("members")}${g.private ? ` · <span class="lockt" title="${t("group_private_short")}">${icon("lock")}</span>` : ""}</span>
           ${isAdmin() || g.is_leader ? `<span style="display:flex;gap:2px"><button class="btn sm ghost act" data-mem="${g.id}" title="${t("manage_members")}">${icon("groups")}<span class="lbl">${t("manage_members")}</span></button><button class="btn sm ghost act" data-edit="${g.id}" title="${t("edit")}">${icon("edit")}<span class="lbl">${t("edit")}</span></button></span>` : ""}</div>
           <div class="leader-line">${icon("crown")}${g.leader_id ? `<span>${t("leader")}: <b>${esc(g.leader_id === S.me.id ? t("you_obj") : g.leader_name)}</b></span>` : `<span class="muted">${t("no_leader")}</span>`}</div>
           <h3>${esc(g.name)}</h3><p>${esc(g.description)}</p>
           <div class="foot">
             <span style="display:flex;gap:2px"><a class="btn sm ghost act" href="#/calendar" data-cal="${g.id}" title="${t("nav_calendar")}">${icon("calendar")}<span class="lbl">${t("nav_calendar")}</span></a>${g.is_member || isAdmin() ? `<a class="btn sm ghost act" href="#/chat/${g.id}" title="${t("nav_chat")}">${icon("chat")}<span class="lbl">${t("nav_chat")}</span></a>` : ""}</span>
-            ${g.is_member ? `<button class="btn sm" data-leave="${g.id}">${icon("check")}${t("joined")}</button>` : `<button class="btn sm primary" data-join="${g.id}">${icon("plus")}${t("join")}</button>`}
+            ${g.is_member ? `<button class="btn sm" data-leave="${g.id}">${icon("check")}${t("joined")}</button>` : g.private ? `<span class="badge">${icon("lock")}${t("invite_only")}</span>` : `<button class="btn sm primary" data-join="${g.id}">${icon("plus")}${t("join")}</button>`}
           </div></div>`).join("")}</div>`
         : `<div class="empty"><span class="serif">${t("no_groups")}</span></div>`);
     $("[data-new]", v)?.addEventListener("click", () => groupForm(null, render));
@@ -834,9 +835,10 @@ async function groupPage(g, rerender) {
         <div class="gname">${esc(g.name)}</div>
         <div class="gmeta"><span><i class="sw"></i>${g.members} ${g.members === 1 ? t("member") : t("members")}</span>
           <span>${icon("crown")}${g.leader_id ? `${t("leader")}: <b>${esc(g.leader_id === S.me.id ? t("you_obj") : g.leader_name)}</b>` : `<span class="muted">${t("no_leader")}</span>`}</span>
+          ${g.private ? `<span class="badge">${icon("lock")}${t("group_private_short")}</span>` : ""}
           ${member ? `<span class="badge acc">${icon("check")}${t("joined")}</span>` : ""}</div>
         <div class="gacts">
-          ${member ? "" : `<button class="btn primary" data-join>${icon("plus")}${t("join")}</button>`}
+          ${member || g.private ? "" : `<button class="btn primary" data-join>${icon("plus")}${t("join")}</button>`}
           ${inside ? `<a class="btn" href="#/chat/${g.id}" data-go>${icon("chat")}${t("nav_chat")}</a>` : ""}
           <a class="btn" href="#/calendar" data-gcal>${icon("calendar")}${t("nav_calendar")}</a>
           ${member && !g.leader_id ? `<button class="btn" data-vote>${icon("crown")}${t("vote")}</button>` : ""}
@@ -944,6 +946,8 @@ function groupForm(g, rerender) {
     <label class="field"><span>${t("name")}</span><input class="input" name="name" required maxlength="80" value="${esc(g?.name)}"></label>
     <label class="field"><span>${t("group_desc")} · ${t("optional")}</span><textarea class="input" name="description" rows="3" style="min-height:80px">${esc(g?.description)}</textarea></label>
     ${isAdmin() ? `<div class="field"><span>${t("color")}</span><div class="colors">${free.length ? free.map((c, i) => `<input type="radio" name="color" id="c${i}" value="${c}" ${c === color ? "checked" : ""}><label for="c${i}" style="--c:${c}"></label>`).join("") : `<span class="muted">${t("colors_all_used")}</span>`}</div></div>` : ""}
+    ${isAdmin() ? `<div class="privbox"><label class="check"><input type="checkbox" name="private" ${g?.private ? "checked" : ""}>${icon("lock")}${t("group_private")}</label>
+      <small class="hint">${t("group_private_hint")}</small></div>` : ""}
     ${g ? `<div class="field"><span>${t("group_image")} · ${t("optional")}</span>
       <div class="gimg-edit" data-gimg></div>
       <small class="hint">${t("group_image_hint")}</small></div>` : ""}
@@ -954,6 +958,7 @@ function groupForm(g, rerender) {
   const submit = async () => {
     if (!form.reportValidity()) return;
     const f = Object.fromEntries(new FormData(form));
+    if (isAdmin()) f.private = $("[name=private]", form).checked;
     try { g ? await api("PATCH", `/api/groups/${g.id}`, f) : await api("POST", "/api/groups", f); toast(t("saved")); s.close(); rerender(); } catch (e) { fail(e); }
   };
   $("[data-ok]", s.el).onclick = submit;

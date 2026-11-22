@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"regexp"
@@ -22,6 +23,7 @@ type Group struct {
 	LeaderName  string `json:"leader_name"`
 	IsLeader    bool   `json:"is_leader"`
 	ImageV      int64  `json:"image_v"` // 0 = no cover image
+	Private     bool   `json:"private"` // invite only: hidden from non-members, nobody joins by themselves
 }
 
 func (a *App) userGroupIDs(uid int64) []int64 {
@@ -45,12 +47,31 @@ func (a *App) isMember(uid, gid int64) bool {
 	return n > 0
 }
 
-func (a *App) listGroups(uid int64) ([]Group, error) {
+// groupPrivate: the group is invite only.
+func (a *App) groupPrivate(gid int64) bool {
+	var p bool
+	a.db.QueryRow(`SELECT private FROM groups WHERE id=?`, gid).Scan(&p)
+	return p
+}
+
+// canSeeGroup: private groups exist only for their members and admins.
+func (a *App) canSeeGroup(u *User, gid int64) bool {
+	return a.groupExists(gid) && (u.IsAdmin() || !a.groupPrivate(gid) || a.isMember(u.ID, gid))
+}
+
+// listGroups: every group for admins; for others the open groups plus the private ones they belong to.
+func (a *App) listGroups(u *User) ([]Group, error) {
+	uid := u.ID
+	where := ` WHERE g.private=0 OR EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=?)`
+	args := []any{uid, uid}
+	if u.IsAdmin() {
+		where, args = "", []any{uid}
+	}
 	rows, err := a.db.Query(`SELECT g.id,g.name,g.description,g.color,g.created_at,
 		(SELECT COUNT(*) FROM group_members m WHERE m.group_id=g.id),
 		EXISTS(SELECT 1 FROM group_members m WHERE m.group_id=g.id AND m.user_id=?),
-		COALESCE(g.leader_id,0), COALESCE(NULLIF(lu.name,''),lu.username,''), g.image_v
-		FROM groups g LEFT JOIN users lu ON lu.id=g.leader_id ORDER BY g.name COLLATE NOCASE`, uid)
+		COALESCE(g.leader_id,0), COALESCE(NULLIF(lu.name,''),lu.username,''), g.image_v, g.private
+		FROM groups g LEFT JOIN users lu ON lu.id=g.leader_id`+where+` ORDER BY g.name COLLATE NOCASE`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +79,7 @@ func (a *App) listGroups(uid int64) ([]Group, error) {
 	out := []Group{}
 	for rows.Next() {
 		var g Group
-		rows.Scan(&g.ID, &g.Name, &g.Description, &g.Color, &g.CreatedAt, &g.Members, &g.IsMember, &g.LeaderID, &g.LeaderName, &g.ImageV)
+		rows.Scan(&g.ID, &g.Name, &g.Description, &g.Color, &g.CreatedAt, &g.Members, &g.IsMember, &g.LeaderID, &g.LeaderName, &g.ImageV, &g.Private)
 		g.IsLeader = g.LeaderID != 0 && g.LeaderID == uid
 		out = append(out, g)
 	}
@@ -66,7 +87,7 @@ func (a *App) listGroups(uid int64) ([]Group, error) {
 }
 
 func (a *App) handleListGroups(w http.ResponseWriter, r *http.Request) {
-	gs, err := a.listGroups(currentUser(r).ID)
+	gs, err := a.listGroups(currentUser(r))
 	if err != nil {
 		jsonErr(w, 500, "server_error")
 		return
@@ -78,6 +99,7 @@ type groupInput struct {
 	Name        *string `json:"name"`
 	Description *string `json:"description"`
 	Color       *string `json:"color"`
+	Private     *bool   `json:"private"` // admins only
 }
 
 func (a *App) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
@@ -98,8 +120,9 @@ func (a *App) handleCreateGroup(w http.ResponseWriter, r *http.Request) {
 	if in.Description != nil {
 		desc = *in.Description
 	}
-	_, err := a.db.Exec(`INSERT INTO groups(name,description,color,created_by,created_at) VALUES(?,?,?,?,?)`,
-		clip(*in.Name, 80), clip(desc, 1000), color, currentUser(r).ID, time.Now().Unix())
+	private := in.Private != nil && *in.Private
+	_, err := a.db.Exec(`INSERT INTO groups(name,description,color,private,created_by,created_at) VALUES(?,?,?,?,?,?)`,
+		clip(*in.Name, 80), clip(desc, 1000), color, private, currentUser(r).ID, time.Now().Unix())
 	if err != nil {
 		jsonErr(w, 409, "group_exists")
 		return
@@ -130,6 +153,9 @@ func (a *App) handleUpdateGroup(w http.ResponseWriter, r *http.Request) {
 		}
 		a.db.Exec(`UPDATE groups SET color=? WHERE id=?`, *in.Color, id)
 	}
+	if in.Private != nil && currentUser(r).IsAdmin() { // open / invite only: admins only
+		a.db.Exec(`UPDATE groups SET private=? WHERE id=?`, *in.Private, id)
+	}
 	jsonOK(w, map[string]bool{"ok": true})
 }
 
@@ -155,6 +181,10 @@ func (a *App) handleJoinGroup(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 404, "not_found")
 		return
 	}
+	if a.groupPrivate(id) { // invite only: an admin or the leader adds people
+		jsonErr(w, 403, "invite_only")
+		return
+	}
 	a.db.Exec(`INSERT OR IGNORE INTO group_members(group_id,user_id,joined_at) VALUES(?,?,?)`, id, currentUser(r).ID, time.Now().Unix())
 	jsonOK(w, map[string]bool{"ok": true})
 }
@@ -167,6 +197,10 @@ func (a *App) handleLeaveGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleGroupMembers(w http.ResponseWriter, r *http.Request) {
+	if !a.canSeeGroup(currentUser(r), pathID(r, "id")) {
+		jsonErr(w, 404, "not_found")
+		return
+	}
 	rows, err := a.db.Query(`SELECT u.id,u.username,u.name,u.role,u.lang,u.created_at FROM group_members m JOIN users u ON u.id=m.user_id
 		WHERE m.group_id=? ORDER BY u.name COLLATE NOCASE`, pathID(r, "id"))
 	if err != nil {
@@ -197,10 +231,15 @@ func (a *App) handleAddMember(w http.ResponseWriter, r *http.Request) {
 		jsonErr(w, 400, "bad_request")
 		return
 	}
-	if _, err := a.db.Exec(`INSERT OR IGNORE INTO group_members(group_id,user_id,joined_at) VALUES(?,?,?)`,
-		pathID(r, "id"), in.UserID, time.Now().Unix()); err != nil {
+	gid := pathID(r, "id")
+	res, err := a.db.Exec(`INSERT OR IGNORE INTO group_members(group_id,user_id,joined_at) VALUES(?,?,?)`,
+		gid, in.UserID, time.Now().Unix())
+	if err != nil {
 		jsonErr(w, 400, "bad_request")
 		return
+	}
+	if n, _ := res.RowsAffected(); n > 0 && a.groupPrivate(gid) {
+		a.invited(currentUser(r), gid, in.UserID)
 	}
 	jsonOK(w, map[string]bool{"ok": true})
 }
@@ -210,6 +249,24 @@ func (a *App) handleRemoveMember(w http.ResponseWriter, r *http.Request) {
 	a.db.Exec(`DELETE FROM group_members WHERE group_id=? AND user_id=?`, gid, uid)
 	a.memberLeft(gid, uid)
 	jsonOK(w, map[string]bool{"ok": true})
+}
+
+// invited tells someone they were brought into a private group (notification + chat notice).
+func (a *App) invited(by *User, gid, uid int64) {
+	var name, lang string
+	a.db.QueryRow(`SELECT name FROM groups WHERE id=?`, gid).Scan(&name)
+	a.db.QueryRow(`SELECT lang FROM users WHERE id=?`, uid).Scan(&lang)
+	who := a.displayName(by.ID)
+	n := a.displayName(uid)
+	a.systemMessage(gid, sysMsg{"sys_invited", map[string]any{"name": n, "by": who}, fmt.Sprintf("%s joined the group, invited by %s.", n, who)})
+	a.notify([]int64{uid}, func(int64) Notice {
+		return Notice{
+			Title: tr(lang, "Invito nel gruppo · ", "Group invitation · ") + name,
+			Body:  tr(lang, who+" ti ha aggiuntə al gruppo privato "+name+".", who+" added you to the private group "+name+"."),
+			URL:   fmt.Sprintf("/#/chat/%d", gid),
+			Tag:   fmt.Sprintf("group-%d", gid),
+		}
+	})
 }
 
 // groupColors is the palette offered to admins; each colour can be used by one group only.

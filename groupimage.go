@@ -140,6 +140,10 @@ func (a *App) handleDeleteGroupImage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleGroupImage(w http.ResponseWriter, r *http.Request) {
+	if !a.canSeeGroup(currentUser(r), pathID(r, "id")) {
+		http.NotFound(w, r)
+		return
+	}
 	b, err := os.ReadFile(a.groupImagePath(pathID(r, "id")))
 	if err != nil {
 		http.NotFound(w, r)

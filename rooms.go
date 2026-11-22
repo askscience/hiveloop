@@ -218,7 +218,7 @@ func (a *App) roomName(room int64) (string, string) {
 
 func (a *App) handleListRooms(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r)
-	gs, err := a.listGroups(u.ID)
+	gs, err := a.listGroups(u)
 	if err != nil {
 		jsonErr(w, 500, "server_error")
 		return

@@ -210,6 +210,9 @@ func (a *App) createEvent(u *User, in EventInput, viaAI bool) (Event, error) {
 		return Event{}, errBadInput
 	}
 	private := in.Private != nil && *in.Private
+	if in.Private == nil && in.GroupID != nil && a.groupPrivate(*in.GroupID) {
+		private = true // a private group's events stay internal unless shared on purpose
+	}
 	if private && in.GroupID == nil { // only a group's own events can be internal
 		return Event{}, errBadInput
 	}
@@ -296,6 +299,8 @@ func (a *App) updateEvent(u *User, id int64, in EventInput) (Event, error) {
 	private := cur.Private
 	if in.Private != nil {
 		private = *in.Private
+	} else if newGroup != nil && (cur.GroupID == nil || *cur.GroupID != *newGroup) && a.groupPrivate(*newGroup) {
+		private = true // moved into a private group: internal unless shared on purpose
 	}
 	if newGroup == nil {
 		if in.Private != nil && *in.Private {

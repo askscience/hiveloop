@@ -22,6 +22,9 @@ is designed to be simple enough for people who are not used to apps.
 - **Public links** for an event or a whole day, readable without an account, with "add to calendar" (.ics).
 - **Groups**, each with its own chat, documents, cover photo and an elected **group leader**
   (majority vote in the group chat) who can manage members and the group's documents.
+- **Private groups** (created by admins): invite only and hidden from non-members; people join
+  when an admin or the group leader adds them. Their events are private by default and are shown
+  to everyone only when chosen event by event.
 - **Chats** for every group plus a general one, and **private messages** between two people:
   @mentions, replies (swipe left on a phone), live updates.
 - **Notifications** even when the app is closed: Web Push (standard library only, VAPID keys are
